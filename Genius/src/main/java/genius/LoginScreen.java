@@ -4,14 +4,15 @@ import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 
 public class LoginScreen {
-
     public static void show() {
         VBox layout = new VBox(10);
         layout.setPadding(new Insets(20));
 
         Label title = new Label("Login");
+        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
         TextField username = new TextField();
         username.setPromptText("Username");
@@ -36,8 +37,10 @@ public class LoginScreen {
         });
 
         Label message = new Label();
+        message.setTextFill(Color.RED);
 
         Button loginBtn = new Button("Login");
+        loginBtn.setDefaultButton(true);
         loginBtn.setOnAction(e -> {
             String user = username.getText().trim();
             String pass = passwordField.getText().trim();
@@ -48,7 +51,13 @@ public class LoginScreen {
             }
 
             if (UserStorage.validateLogin(user, pass)) {
+                Main.currentUser = UserStorage.getUser(user);
                 message.setText("Login successful!");
+                if (Main.currentUser.isAdmin()) {
+                    AdminDashboard.show();
+                } else {
+                    UserDashboard.show();
+                }
             } else {
                 message.setText("Invalid credentials.");
             }
@@ -57,8 +66,10 @@ public class LoginScreen {
         Button registerBtn = new Button("Go to Register");
         registerBtn.setOnAction(e -> RegisterScreen.show());
 
-        layout.getChildren().addAll(title, username, passwordField, visiblePassword, showPassword, loginBtn, registerBtn, message);
-        Main.primaryStage.setScene(new Scene(layout, 300, 300));
+        layout.getChildren().addAll(title, username, passwordField, visiblePassword,
+                showPassword, loginBtn, registerBtn, message);
+        Scene scene = new Scene(layout, 350, 350);
+        Main.primaryStage.setScene(scene);
         Main.primaryStage.setTitle("Login");
         Main.primaryStage.show();
     }
