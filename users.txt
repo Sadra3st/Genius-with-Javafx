@@ -1,1 +1,1 @@
-admin|admin123|true
+admin|admin123|admin@genius.com|true|false|true

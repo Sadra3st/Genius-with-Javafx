@@ -12,11 +12,14 @@ public class RegisterScreen {
         VBox layout = new VBox(10);
         layout.setPadding(new Insets(20));
 
-        Label title = new Label("Register");
+        Label title = new Label("Register User");
         title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
         TextField username = new TextField();
         username.setPromptText("Username");
+
+        TextField email = new TextField();
+        email.setPromptText("Email");
 
         PasswordField passwordField = new PasswordField();
         passwordField.setPromptText("Password");
@@ -37,6 +40,8 @@ public class RegisterScreen {
             visiblePassword.setManaged(show);
         });
 
+        CheckBox artistCheckbox = new CheckBox("I am an artist");
+
         Text passwordStrength = new Text();
         passwordStrength.setFill(Color.GRAY);
 
@@ -52,8 +57,10 @@ public class RegisterScreen {
         registerBtn.setOnAction(e -> {
             String user = username.getText().trim();
             String pass = passwordField.getText().trim();
+            String userEmail = email.getText().trim();
+            boolean isArtist = artistCheckbox.isSelected();
 
-            if (user.isEmpty() || pass.isEmpty()) {
+            if (user.isEmpty() || pass.isEmpty() || userEmail.isEmpty()) {
                 message.setText("Please fill all fields.");
                 return;
             }
@@ -68,37 +75,52 @@ public class RegisterScreen {
                 return;
             }
 
-            if (calculatePasswordStrength(pass) < 3) {
+            if (!userEmail.matches("^[\\w-.]+@([\\w-]+\\.)+[\\w-]{2,4}$")) {
+                message.setText("Please enter a valid email address.");
+                return;
+            }
+
+            if (UserStorage.isEmailBanned(userEmail)) {
+                message.setText("This email is banned and cannot be used.");
+                return;
+            }
+
+            if (calculatePasswordStrength(pass) < 2) {
                 message.setText("Password is too weak. Please choose a stronger password.");
                 return;
             }
 
             if (UserStorage.userExists(user)) {
                 message.setText("Username already exists.");
+            } else if (UserStorage.emailExists(userEmail)) {
+                message.setText("Email already in use.");
             } else {
-                UserStorage.registerUser(user, pass);
-                message.setText("Registration successful! You can now login.");
+                // Artists start unverified
+                UserStorage.registerUser(user, pass, userEmail, false, isArtist, !isArtist);
+                message.setText("Registration successful! " +
+                        (isArtist ? "Your artist account will be reviewed by an admin." : "You can now login."));
             }
         });
 
         Button backBtn = new Button("Back to Login");
         backBtn.setOnAction(e -> LoginScreen.show());
 
-        layout.getChildren().addAll(title, username, passwordField, visiblePassword,
-                showPassword, passwordStrength, registerBtn, backBtn, message);
-        Scene scene = new Scene(layout, 350, 400);
+        layout.getChildren().addAll(title, username, email, passwordField, visiblePassword,
+                showPassword, artistCheckbox, passwordStrength, registerBtn, backBtn, message);
+        Scene scene = new Scene(layout, 350, 450);
         Main.primaryStage.setScene(scene);
         Main.primaryStage.setTitle("Register");
         Main.primaryStage.show();
     }
 
+    // Rest of the methods remain the same
     public static int calculatePasswordStrength(String password) {
         int strength = 0;
         if (password.length() >= 8) strength++;
-        if (password.matches(".*[A-Z].*")) strength++; // has uppercase
-        if (password.matches(".*[a-z].*")) strength++; // has lowercase
-        if (password.matches(".*[0-9].*")) strength++; // has digit
-        if (password.matches(".*[!@#$%^&*()].*")) strength++; // has special char
+        if (password.matches(".*[A-Z].*")) strength++;
+        if (password.matches(".*[a-z].*")) strength++;
+        if (password.matches(".*[0-9].*")) strength++;
+        if (password.matches(".*[!@#$%^&*()':><?/].*")) strength++;
         return strength;
     }
 

@@ -55,11 +55,18 @@ public class LoginScreen {
                 message.setText("Login successful!");
                 if (Main.currentUser.isAdmin()) {
                     AdminDashboard.show();
+                } else if (Main.currentUser.isArtist()) {
+                    ArtistDashboard.show();
                 } else {
                     UserDashboard.show();
                 }
             } else {
-                message.setText("Invalid credentials.");
+                User userObj = UserStorage.getUser(user);
+                if (userObj != null && userObj.isArtist() && !userObj.isVerified()) {
+                    message.setText("Your artist account is pending verification.");
+                } else {
+                    message.setText("Invalid credentials.");
+                }
             }
         });
 
