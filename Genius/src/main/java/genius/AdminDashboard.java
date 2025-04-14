@@ -1,23 +1,23 @@
 package genius;
 
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 
 import java.util.Map;
 
 public class AdminDashboard {
     public static void show() {
-        VBox layout = new VBox(10);
+        BorderPane layout = new BorderPane();
         layout.setPadding(new Insets(20));
 
-        Label welcomeLabel = new Label("Welcome, Sir " + Main.currentUser.getUsername() + "!");
+        Label welcomeLabel = new Label("Welcome, " + Main.currentUser.getUsername() + "!");
         welcomeLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
         Label infoLabel = new Label("You are logged in as an administrator.");
@@ -28,30 +28,39 @@ public class AdminDashboard {
 
         // User Management Tab
         Tab userTab = new Tab("User Management");
+        userTab.setContent(createUserManagementContent());
         userTab.setClosable(false);
-        userTab.setContent(createUserManagementTab());
 
         // Artist Verification Tab
         Tab artistTab = new Tab("Artist Verification");
+        artistTab.setContent(createArtistVerificationContent());
         artistTab.setClosable(false);
-        artistTab.setContent(createArtistVerificationTab());
 
         tabPane.getTabs().addAll(userTab, artistTab);
-        layout.getChildren().addAll(welcomeLabel, infoLabel, tabPane);
+        layout.setCenter(tabPane);
 
-        Scene scene = new Scene(layout, 600, 500);
+        // Footer with logout button
+        HBox footer = new HBox(10);
+        Button logoutBtn = new Button("Logout");
+        logoutBtn.setOnAction(e -> {
+            Main.currentUser = null;
+            LoginScreen.show();
+        });
+        footer.getChildren().add(logoutBtn);
+        layout.setBottom(footer);
+
+        Scene scene = new Scene(layout, 800, 600);
         Main.primaryStage.setScene(scene);
         Main.primaryStage.setTitle("Admin Dashboard");
         Main.primaryStage.show();
     }
 
-    private static VBox createUserManagementTab() {
-        VBox tabContent = new VBox(10);
+    private static VBox createUserManagementContent() {
+        VBox content = new VBox(10);
 
         // Table for user management
         TableView<User> userTable = new TableView<>();
         ObservableList<User> users = FXCollections.observableArrayList(UserStorage.getAllUsers().values());
-        userTable.setItems(users);
 
         TableColumn<User, String> usernameCol = new TableColumn<>("Username");
         usernameCol.setCellValueFactory(new PropertyValueFactory<>("username"));
@@ -69,11 +78,10 @@ public class AdminDashboard {
         verifiedCol.setCellValueFactory(new PropertyValueFactory<>("verified"));
 
         userTable.getColumns().addAll(usernameCol, emailCol, adminCol, artistCol, verifiedCol);
-        userTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        userTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
         // Admin controls
         HBox adminControls = new HBox(10);
-
         Button promoteBtn = new Button("Promote/Demote Admin");
         promoteBtn.setOnAction(e -> {
             User selected = userTable.getSelectionModel().getSelectedItem();
@@ -84,8 +92,8 @@ public class AdminDashboard {
             }
         });
 
-        Button deleteBtn = new Button("Ban User");
-        deleteBtn.setOnAction(e -> {
+        Button banBtn = new Button("Ban User");
+        banBtn.setOnAction(e -> {
             User selected = userTable.getSelectionModel().getSelectedItem();
             if (selected != null && !selected.getUsername().equals("admin")) {
                 UserStorage.deleteUser(selected.getUsername());
@@ -93,67 +101,53 @@ public class AdminDashboard {
             }
         });
 
-        Button changePasswordBtn = new Button("Change Password");
-        changePasswordBtn.setOnAction(e -> ChangePasswordScreen.show());
+        adminControls.getChildren().addAll(promoteBtn, banBtn);
+        content.getChildren().addAll(userTable, adminControls);
 
-        Button logoutBtn = new Button("Logout");
-        logoutBtn.setOnAction(e -> {
-            Main.currentUser = null;
-            LoginScreen.show();
-        });
-
-        adminControls.getChildren().addAll(promoteBtn, deleteBtn, changePasswordBtn, logoutBtn);
-        tabContent.getChildren().addAll(userTable, adminControls);
-
-        return tabContent;
+        return content;
     }
 
-    private static VBox createArtistVerificationTab() {
-        VBox tabContent = new VBox(10);
+    private static VBox createArtistVerificationContent() {
+        VBox content = new VBox(10);
 
-        // Table for unverified artists
-        TableView<User> artistTable = new TableView<>();
-        ObservableList<User> artists = FXCollections.observableArrayList(
-                UserStorage.getAllUsers().values().stream()
-                        .filter(user -> user.isArtist() && !user.isVerified())
-                        .toList()
+        // Table for artist verification
+        TableView<Map.Entry<String, String>> requestsTable = new TableView<>();
+        ObservableList<Map.Entry<String, String>> requests = FXCollections.observableArrayList(
+                ArtistVerification.getPendingRequests().entrySet()
         );
-        artistTable.setItems(artists);
 
-        TableColumn<User, String> usernameCol = new TableColumn<>("Username");
-        usernameCol.setCellValueFactory(new PropertyValueFactory<>("username"));
+        TableColumn<Map.Entry<String, String>, String> userCol = new TableColumn<>("Username");
+        userCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getKey()));
 
-        TableColumn<User, String> emailCol = new TableColumn<>("Email");
-        emailCol.setCellValueFactory(new PropertyValueFactory<>("email"));
+        TableColumn<Map.Entry<String, String>, String> bioCol = new TableColumn<>("Artist Bio");
+        bioCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getValue()));
 
-        artistTable.getColumns().addAll(usernameCol, emailCol);
-        artistTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        requestsTable.getColumns().addAll(userCol, bioCol);
+        requestsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
         // Verification controls
         HBox verifyControls = new HBox(10);
-
         Button verifyBtn = new Button("Verify Artist");
         verifyBtn.setOnAction(e -> {
-            User selected = artistTable.getSelectionModel().getSelectedItem();
+            Map.Entry<String, String> selected = requestsTable.getSelectionModel().getSelectedItem();
             if (selected != null) {
-                selected.setVerified(true);
-                UserStorage.updateUser(selected);
-                artists.remove(selected);
+                ArtistVerification.approveRequest(selected.getKey());
+                requests.remove(selected);
             }
         });
 
-        Button rejectBtn = new Button("Reject Artist");
+        Button rejectBtn = new Button("Reject");
         rejectBtn.setOnAction(e -> {
-            User selected = artistTable.getSelectionModel().getSelectedItem();
+            Map.Entry<String, String> selected = requestsTable.getSelectionModel().getSelectedItem();
             if (selected != null) {
-                UserStorage.deleteUser(selected.getUsername());
-                artists.remove(selected);
+                ArtistVerification.rejectRequest(selected.getKey());
+                requests.remove(selected);
             }
         });
 
         verifyControls.getChildren().addAll(verifyBtn, rejectBtn);
-        tabContent.getChildren().addAll(artistTable, verifyControls);
+        content.getChildren().addAll(requestsTable, verifyControls);
 
-        return tabContent;
+        return content;
     }
 }

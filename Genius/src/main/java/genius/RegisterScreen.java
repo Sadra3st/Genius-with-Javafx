@@ -100,7 +100,8 @@ public class RegisterScreen {
                 message.setText("Registration successful! " +
                         (isArtist ? "Your artist account will be reviewed by an admin." : "You can now login."));
             }
-        });
+        }
+        );
 
         Button backBtn = new Button("Back to Login");
         backBtn.setOnAction(e -> LoginScreen.show());
