@@ -1,6 +1,8 @@
 package genius;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 
 import static genius.DataStorage.DATA_DIR;
@@ -36,10 +38,18 @@ public class UserStorage {
                 }
             }
         } catch (IOException e) {
-            // File doesn't exist yet, that's fine
+            // File doesn't exist yet
         }
     }
-
+    public static int countFollowers(String username) {
+        try {
+            return (int) Files.lines(Paths.get(FOLLOWING_FILE))
+                    .filter(line -> line.endsWith("|" + username))
+                    .count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
     private static void loadBannedEmails() {
         bannedEmails.clear();
         try (BufferedReader reader = new BufferedReader(new FileReader(BANNED_EMAILS_PATH))) {
@@ -48,7 +58,7 @@ public class UserStorage {
                 bannedEmails.add(line.trim().toLowerCase());
             }
         } catch (IOException e) {
-            // File doesn't exist yet, that's fine
+            // File doesn't exist yet
         }
     }
 
@@ -135,7 +145,7 @@ public class UserStorage {
         users.remove(username);
         saveUsers();
     }
-    // Add to DataStorage class
+
     public static void saveComment(Comment comment) throws IOException {
         String commentsDir = DATA_DIR + "comments/";
         new File(commentsDir).mkdirs();
@@ -161,5 +171,44 @@ public class UserStorage {
             }
         }
         return comments;
+    }
+    static final String FOLLOWING_FILE = "data/following.txt";
+
+    public static void followArtist(String followerUsername, String artistUsername) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(FOLLOWING_FILE, true))) {
+            writer.write(followerUsername + "|" + artistUsername);
+            writer.newLine();
+        } catch (IOException e) {
+            System.err.println("Error saving follow relationship: " + e.getMessage());
+        }
+    }
+
+    public static void unfollowArtist(String followerUsername, String artistUsername) {
+        try {
+            List<String> lines = Files.readAllLines(Paths.get(FOLLOWING_FILE));
+            lines.removeIf(line -> line.equals(followerUsername + "|" + artistUsername));
+            Files.write(Paths.get(FOLLOWING_FILE), lines);
+        } catch (IOException e) {
+            System.err.println("Error removing follow relationship: " + e.getMessage());
+        }
+    }
+
+    public static int countFollowing(String username) {
+        try {
+            return (int) Files.lines(Paths.get(FOLLOWING_FILE))
+                    .filter(line -> line.startsWith(username + "|"))
+                    .count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    public static boolean isFollowing(String followerUsername, String artistUsername) {
+        try {
+            return Files.lines(Paths.get(FOLLOWING_FILE))
+                    .anyMatch(line -> line.equals(followerUsername + "|" + artistUsername));
+        } catch (IOException e) {
+            return false;
+        }
     }
 }

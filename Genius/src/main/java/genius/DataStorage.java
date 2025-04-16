@@ -3,18 +3,22 @@ package genius;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class DataStorage {
     static final String DATA_DIR = "data/";
     private static final String SONGS_DIR = DATA_DIR + "songs/";
     private static final String LYRICS_DIR = DATA_DIR + "lyrics/";
+    private static final String COMMENTS_DIR = DATA_DIR + "comments/";
 
     static {
         new File(DATA_DIR).mkdirs();
         new File(SONGS_DIR).mkdirs();
         new File(LYRICS_DIR).mkdirs();
+        new File(COMMENTS_DIR).mkdirs();
     }
 
+    // Song storage methods
     public static void saveSong(Song song) throws IOException {
         // Save song metadata
         String songFile = SONGS_DIR + song.getId() + ".song";
@@ -77,5 +81,76 @@ public class DataStorage {
     public static void deleteSong(String songId) throws IOException {
         Files.deleteIfExists(Paths.get(SONGS_DIR + songId + ".song"));
         Files.deleteIfExists(Paths.get(LYRICS_DIR + songId + ".txt"));
+
+        // Delete associated comments
+        File[] commentFiles = new File(COMMENTS_DIR).listFiles((dir, name) -> name.startsWith(songId + "_"));
+        if (commentFiles != null) {
+            for (File file : commentFiles) {
+                Files.deleteIfExists(file.toPath());
+            }
+        }
+    }
+
+    // Comment storage methods
+    public static void saveComment(Comment comment) throws IOException {
+        String commentFile = COMMENTS_DIR + comment.getSongId() + "_" + comment.getId() + ".comment";
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(commentFile))) {
+            oos.writeObject(comment);
+        }
+    }
+
+    public static List<Comment> loadSongComments(String songId) throws IOException, ClassNotFoundException {
+        List<Comment> comments = new ArrayList<>();
+        File[] files = new File(COMMENTS_DIR).listFiles((dir, name) -> name.startsWith(songId + "_") && name.endsWith(".comment"));
+
+        if (files != null) {
+            for (File file : files) {
+                try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                    comments.add((Comment) ois.readObject());
+                }
+            }
+        }
+        return comments;
+    }
+
+    public static List<Comment> loadUserComments(String userId) throws IOException, ClassNotFoundException {
+        List<Comment> comments = new ArrayList<>();
+        File[] files = new File(COMMENTS_DIR).listFiles((dir, name) -> name.endsWith(".comment"));
+
+        if (files != null) {
+            for (File file : files) {
+                try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                    Comment comment = (Comment) ois.readObject();
+                    if (comment.getUserId().equals(userId)) {
+                        comments.add(comment);
+                    }
+                }
+            }
+        }
+        return comments;
+    }
+
+    public static void deleteComment(String commentId) throws IOException {
+        File[] files = new File(COMMENTS_DIR).listFiles((dir, name) -> name.contains(commentId) && name.endsWith(".comment"));
+        if (files != null && files.length > 0) {
+            Files.delete(files[0].toPath());
+        }
+    }
+
+    // Helper methods
+    public static int countSongComments(String songId) {
+        try {
+            return loadSongComments(songId).size();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    public static int countUserComments(String userId) {
+        try {
+            return loadUserComments(userId).size();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 }

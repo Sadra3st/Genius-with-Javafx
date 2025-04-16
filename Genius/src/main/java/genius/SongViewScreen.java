@@ -6,12 +6,15 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
+
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 public class SongViewScreen {
     private static final Map<String, String> userRatings = new HashMap<>(); // userId+songId -> "like"/"dislike"
+    private static final Map<String, Boolean> followStatus = new HashMap<>(); // userId+artistId -> true/false
 
     public static void show(Song song) {
         BorderPane layout = new BorderPane();
@@ -28,7 +31,15 @@ public class SongViewScreen {
         User artist = UserStorage.getUser(song.getArtistId());
         Label artistLabel = new Label("By " + (artist != null ? artist.getUsername() : "Unknown Artist"));
 
-        header.getChildren().addAll(backBtn, titleLabel, artistLabel);
+        // Follow button
+        Button followBtn = new Button();
+        updateFollowButton(followBtn, song.getArtistId());
+        followBtn.setOnAction(e -> toggleFollowArtist(song.getArtistId(), followBtn));
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        header.getChildren().addAll(backBtn, titleLabel, artistLabel, spacer, followBtn);
         layout.setTop(header);
 
         // Lyrics display with proper formatting
@@ -74,11 +85,48 @@ public class SongViewScreen {
         });
 
         ratingBox.getChildren().addAll(likeBtn, dislikeBtn);
-        layout.setBottom(ratingBox);
+
+        // Combine rating and comment sections
+        VBox bottomSection = new VBox(10);
+        bottomSection.getChildren().add(ratingBox);
+        setupCommentsSection(song, bottomSection);
+        layout.setBottom(bottomSection);
 
         Scene scene = new Scene(layout, 800, 600);
         Main.primaryStage.setScene(scene);
         Main.primaryStage.setTitle(song.getTitle() + " - Genius");
+    }
+
+    private static void toggleFollowArtist(String artistId, Button followBtn) {
+        if (Main.currentUser == null || artistId.equals(Main.currentUser.getUsername())) return;
+
+        String currentUser = Main.currentUser.getUsername();
+        String followKey = currentUser + "|" + artistId;
+
+        if (UserStorage.isFollowing(currentUser, artistId)) {
+            UserStorage.unfollowArtist(currentUser, artistId);
+            followStatus.put(followKey, false);
+        } else {
+            UserStorage.followArtist(currentUser, artistId);
+            followStatus.put(followKey, true);
+        }
+        updateFollowButton(followBtn, artistId);
+    }
+
+    private static void updateFollowButton(Button followBtn, String artistId) {
+        if (Main.currentUser == null || artistId.equals(Main.currentUser.getUsername())) {
+            followBtn.setVisible(false);
+            return;
+        }
+
+        String followKey = Main.currentUser.getUsername() + "|" + artistId;
+        boolean isFollowing = followStatus.computeIfAbsent(followKey,
+                k -> UserStorage.isFollowing(Main.currentUser.getUsername(), artistId));
+
+        followBtn.setText(isFollowing ? "Following ✓" : "+ Follow");
+        followBtn.setStyle(isFollowing ?
+                "-fx-background-color: #4CAF50; -fx-text-fill: white;" :
+                "-fx-background-color: #2196F3; -fx-text-fill: white;");
     }
 
     private static void handleRating(Song song, Button likeBtn, Button dislikeBtn, boolean isLike, String ratingKey) {
@@ -136,11 +184,12 @@ public class SongViewScreen {
         likeBtn.setStyle("".equals(currentRating) || !"like".equals(currentRating) ? "" : "-fx-background-color: #aaffaa;");
         dislikeBtn.setStyle("".equals(currentRating) || !"dislike".equals(currentRating) ? "" : "-fx-background-color: #ffaaaa;");
     }
-    private static void setupCommentsSection(Song song, BorderPane layout) {
+
+    private static void setupCommentsSection(Song song, VBox container) {
         VBox commentsBox = new VBox(10);
         commentsBox.setPadding(new Insets(15));
 
-        Label commentsLabel = new Label("Comments");
+        Label commentsLabel = new Label("Comments (" + song.getComments().size() + ")");
         commentsLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
         ListView<Comment> commentsList = new ListView<>();
@@ -153,35 +202,46 @@ public class SongViewScreen {
                     setText(null);
                 } else {
                     User user = UserStorage.getUser(comment.getUserId());
-                    setText((user != null ? user.getUsername() : "Unknown") + ": " +
-                            comment.getText() + "\n" + comment.getTimestamp());
+                    setText((user != null ? user.getUsername() : "Unknown") +
+                            " (" + comment.getTimestamp().toLocalDate() + "):\n" +
+                            comment.getText());
                 }
             }
         });
 
         // Add comment form
         HBox commentForm = new HBox(10);
-        TextField commentField = new TextField();
-        commentField.setPromptText("Add a comment...");
-        Button postCommentBtn = new Button("Post");
+        TextArea commentField = new TextArea();
+        commentField.setPromptText("Write your comment...");
+        commentField.setPrefRowCount(2);
+        commentField.setWrapText(true);
 
+        Button postCommentBtn = new Button("Post");
+        postCommentBtn.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
         postCommentBtn.setOnAction(e -> {
-            if (!commentField.getText().isEmpty() && Main.currentUser != null) {
+            String commentText = commentField.getText().trim();
+            if (!commentText.isEmpty() && Main.currentUser != null) {
                 Comment newComment = new Comment(
                         UUID.randomUUID().toString(),
                         Main.currentUser.getUsername(),
                         song.getId(),
-                        commentField.getText()
+                        commentText
                 );
                 song.addComment(newComment);
-                commentsList.getItems().add(newComment);
-                SongStorage.saveSong(song);
-                commentField.clear();
+                try {
+                    DataStorage.saveComment(newComment);
+                    commentsList.getItems().add(newComment);
+                    commentsLabel.setText("Comments (" + song.getComments().size() + ")");
+                    commentField.clear();
+                } catch (IOException ex) {
+                    new Alert(Alert.AlertType.ERROR, "Failed to save comment").show();
+                }
             }
         });
 
         commentForm.getChildren().addAll(commentField, postCommentBtn);
+        HBox.setHgrow(commentField, Priority.ALWAYS);
         commentsBox.getChildren().addAll(commentsLabel, commentsList, commentForm);
-        layout.setBottom(commentsBox);
+        container.getChildren().add(commentsBox);
     }
 }

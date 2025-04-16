@@ -1,5 +1,6 @@
 package genius;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -16,7 +17,6 @@ public class Song implements Serializable {
     private int duration; // in seconds
     private int likeCount;
     private int dislikeCount;
-    private List<Comment> comments;
     private List<Annotation> annotations;
 
     public Song(String id, String title, String lyrics, int duration, String artistId) {
@@ -31,7 +31,7 @@ public class Song implements Serializable {
         this.annotations = new ArrayList<>();
     }
 
-    // Getters
+
     public String getId() { return id; }
     public String getTitle() { return title; }
     public String getLyrics() { return lyrics; }
@@ -39,10 +39,8 @@ public class Song implements Serializable {
     public int getDuration() { return duration; }
     public int getLikeCount() { return likeCount; }
     public int getDislikeCount() { return dislikeCount; }
-    public List<Comment> getComments() { return new ArrayList<>(comments); }
-    public List<Annotation> getAnnotations() { return new ArrayList<>(annotations); }
 
-    // Setters
+
     public void setTitle(String title) { this.title = title; }
     public void setLyrics(String lyrics) { this.lyrics = lyrics; }
     public void setDuration(int duration) { this.duration = duration; }
@@ -53,13 +51,6 @@ public class Song implements Serializable {
         return lyrics.length() > 50 ? lyrics.substring(0, 50) + "..." : lyrics;
     }
 
-    public void addComment(Comment comment) {
-        comments.add(comment);
-    }
-
-    public void addAnnotation(Annotation annotation) {
-        annotations.add(annotation);
-    }
 
     public void incrementLikes() { likeCount++; }
     public void incrementDislikes() { dislikeCount++; }
@@ -72,5 +63,27 @@ public class Song implements Serializable {
                 ", duration=" + duration +
                 ", likes=" + likeCount +
                 '}';
+    }
+    private transient List<Comment> comments = new ArrayList<>();
+
+    public void addComment(Comment comment) {
+        comments.add(comment);
+        try {
+            DataStorage.saveComment(comment);
+        } catch (IOException e) {
+            System.err.println("Failed to save comment: " + e.getMessage());
+        }
+    }
+
+    public List<Comment> getComments() {
+        if (comments == null) {
+            comments = new ArrayList<>();
+            try {
+                comments = DataStorage.loadSongComments(this.id);
+            } catch (Exception e) {
+                System.err.println("Error loading comments: " + e.getMessage());
+            }
+        }
+        return comments;
     }
 }
