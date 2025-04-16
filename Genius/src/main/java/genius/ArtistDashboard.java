@@ -1,7 +1,5 @@
 package genius;
 
-
-import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -13,29 +11,42 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
-import javafx.util.Pair;
 
+import java.io.IOException;
 import java.util.*;
 
 public class ArtistDashboard {
     private static ObservableList<Song> songs = FXCollections.observableArrayList();
-    private static Map<String, List<Annotation>> songAnnotations = new HashMap<>();
     private static Map<String, Integer> songViews = new HashMap<>();
 
     public static void show() {
         BorderPane mainLayout = new BorderPane();
         mainLayout.setPadding(new Insets(20));
 
-        // Header
-        VBox header = new VBox(10);
-        Label welcomeLabel = new Label("Welcome Artist " + Main.currentUser.getUsername() + "!");
-        welcomeLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #2d3436;");
+        // Top Navigation Bar
+        HBox topBar = new HBox(10);
+        topBar.setPadding(new Insets(0, 0, 20, 0));
 
-        Label statsLabel = new Label(getQuickStats());
-        statsLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #636e72;");
+        Button homeBtn = new Button("Browse Songs");
+        homeBtn.setOnAction(e -> HomeScreen.show());
 
-        header.getChildren().addAll(welcomeLabel, statsLabel);
-        mainLayout.setTop(header);
+        Button mySongsBtn = new Button("My Songs");
+        mySongsBtn.setOnAction(e -> loadArtistData());
+
+        Button changePasswordBtn = new Button("Change Password");
+        changePasswordBtn.setOnAction(e -> ChangePasswordScreen.show());
+
+        Button logoutButton = new Button("Logout");
+        logoutButton.setOnAction(e -> {
+            Main.currentUser = null;
+            LoginScreen.show();
+        });
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        topBar.getChildren().addAll(homeBtn, mySongsBtn, spacer, changePasswordBtn, logoutButton);
+        mainLayout.setTop(topBar);
 
         // Center Content (Tabbed Interface)
         TabPane tabPane = new TabPane();
@@ -50,27 +61,8 @@ public class ArtistDashboard {
         analyticsTab.setContent(createAnalyticsTab());
         analyticsTab.setClosable(false);
 
-        // Annotations Tab
-        Tab annotationsTab = new Tab("Lyric Annotations");
-        annotationsTab.setContent(createAnnotationsTab());
-        annotationsTab.setClosable(false);
-
-        tabPane.getTabs().addAll(songsTab, analyticsTab, annotationsTab);
+        tabPane.getTabs().addAll(songsTab, analyticsTab);
         mainLayout.setCenter(tabPane);
-
-        // Footer
-        HBox footer = new HBox(10);
-        Button changePasswordBtn = new Button("Change Password");
-        changePasswordBtn.setOnAction(e -> ChangePasswordScreen.show());
-
-        Button logoutBtn = new Button("Logout");
-        logoutBtn.setOnAction(e -> {
-            Main.currentUser = null;
-            LoginScreen.show();
-        });
-
-        footer.getChildren().addAll(changePasswordBtn, logoutBtn);
-        mainLayout.setBottom(footer);
 
         // Load artist data
         loadArtistData();
@@ -82,34 +74,32 @@ public class ArtistDashboard {
     }
 
     private static void loadArtistData() {
-        // In a real app, this would load from database
-        songs.addAll(
-                new Song("1", "Moonlight Sonata", "The classic piano piece...", 150),
-                new Song("2", "Summer Vibes", "Feel the summer heat...", 320)
-        );
+        songs.clear();
+        songViews.clear();
 
-        songViews.put("1", 1250);
-        songViews.put("2", 875);
+        try {
+            List<Song> loadedSongs = DataStorage.loadArtistSongs(Main.currentUser.getUsername());
+            songs.addAll(loadedSongs);
 
-        // Sample annotations
-        List<Annotation> annotations1 = new ArrayList<>();
-        annotations1.add(new Annotation("1", 5, 10, "This part inspired by Beethoven's 5th"));
-        annotations1.add(new Annotation("1", 15, 20, "Reference to Shakespeare's sonnets"));
+            // Initialize views
+            for (Song song : songs) {
+                songViews.put(song.getId(), loadSongViews(song.getId()));
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading artist data: " + e.getMessage());
+            new Alert(Alert.AlertType.ERROR, "Could not load artist data: " + e.getMessage()).show();
+        }
+    }
 
-        List<Annotation> annotations2 = new ArrayList<>();
-        annotations2.add(new Annotation("2", 2, 8, "Summer of '69 reference"));
-
-        songAnnotations.put("1", annotations1);
-        songAnnotations.put("2", annotations2);
+    private static int loadSongViews(String songId) {
+        return 0; // Default to 0 views
     }
 
     private static String getQuickStats() {
         int totalSongs = songs.size();
         int totalViews = songViews.values().stream().mapToInt(Integer::intValue).sum();
-        int totalAnnotations = songAnnotations.values().stream().mapToInt(List::size).sum();
 
-        return String.format("Songs: %d | Total Views: %d | Annotations: %d",
-                totalSongs, totalViews, totalAnnotations);
+        return String.format("Songs: %d | Total Views: %,d", totalSongs, totalViews);
     }
 
     private static VBox createSongsTab() {
@@ -124,10 +114,13 @@ public class ArtistDashboard {
         titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
 
         TableColumn<Song, String> lyricsCol = new TableColumn<>("Preview");
-        lyricsCol.setCellValueFactory(new PropertyValueFactory<>("lyricsPreview"));
+        lyricsCol.setCellValueFactory(param ->
+                new SimpleStringProperty(param.getValue().getLyrics().length() > 50 ?
+                        param.getValue().getLyrics().substring(0, 50) + "..." :
+                        param.getValue().getLyrics()));
 
         TableColumn<Song, Integer> lengthCol = new TableColumn<>("Length (sec)");
-        lengthCol.setCellValueFactory(new PropertyValueFactory<>("lengthSeconds"));
+        lengthCol.setCellValueFactory(new PropertyValueFactory<>("duration"));
 
         songsTable.getColumns().addAll(titleCol, lyricsCol, lengthCol);
         songsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
@@ -146,11 +139,7 @@ public class ArtistDashboard {
         Button deleteSongBtn = new Button("Delete Selected");
         deleteSongBtn.setOnAction(e -> {
             Song selected = songsTable.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                songs.remove(selected);
-                songViews.remove(selected.getId());
-                songAnnotations.remove(selected.getId());
-            }
+            if (selected != null) deleteSong(selected);
         });
 
         songActions.getChildren().addAll(addSongBtn, editSongBtn, deleteSongBtn);
@@ -163,81 +152,37 @@ public class ArtistDashboard {
         VBox tabContent = new VBox(15);
         tabContent.setPadding(new Insets(15));
 
-        // Most Popular Songs
-        Label popularLabel = new Label("Most Popular Songs");
-        popularLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        // Real statistics
+        Label statsLabel = new Label("Your Statistics");
+        statsLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
-        ListView<String> popularSongsList = new ListView<>();
-        songViews.entrySet().stream()
-                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-                .forEach(entry -> {
-                    String songTitle = songs.stream()
-                            .filter(s -> s.getId().equals(entry.getKey()))
-                            .findFirst()
-                            .map(Song::getTitle)
-                            .orElse("Unknown Song");
-                    popularSongsList.getItems().add(String.format("%s - %,d views", songTitle, entry.getValue()));
-                });
+        // Calculate real stats
+        int totalSongs = songs.size();
+        int totalViews = songViews.values().stream().mapToInt(Integer::intValue).sum();
+        int totalLikes = songs.stream().mapToInt(Song::getLikeCount).sum();
 
-        // Recent Activity
-        Label activityLabel = new Label("Recent Activity");
-        activityLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
-
-        TextFlow activityFlow = new TextFlow();
-        activityFlow.getChildren().addAll(
-                new Text("Today: 42 new views\n"),
-                new Text("Yesterday: 128 new views\n"),
-                new Text("This week: 540 new views")
+        Label statsText = new Label(
+                String.format("Total Songs: %d\nTotal Views: %d\nTotal Likes: %d",
+                        totalSongs, totalViews, totalLikes)
         );
 
-        tabContent.getChildren().addAll(popularLabel, popularSongsList, activityLabel, activityFlow);
-        return tabContent;
-    }
+        // Most popular song
+        Optional<Map.Entry<String, Integer>> mostPopular = songViews.entrySet().stream()
+                .max(Map.Entry.comparingByValue());
 
-    private static VBox createAnnotationsTab() {
-        VBox tabContent = new VBox(15);
-        tabContent.setPadding(new Insets(15));
-
-        // Annotations Table
-        TableView<Annotation> annotationsTable = new TableView<>();
-        ObservableList<Annotation> allAnnotations = FXCollections.observableArrayList();
-        songAnnotations.values().forEach(allAnnotations::addAll);
-        annotationsTable.setItems(allAnnotations);
-
-        TableColumn<Annotation, String> songCol = new TableColumn<>("Song");
-        songCol.setCellValueFactory(param -> {
-            String songId = param.getValue().getSongId();
-            String title = songs.stream()
+        if (mostPopular.isPresent()) {
+            String songId = mostPopular.get().getKey();
+            String songTitle = songs.stream()
                     .filter(s -> s.getId().equals(songId))
                     .findFirst()
                     .map(Song::getTitle)
                     .orElse("Unknown");
-            return new SimpleStringProperty(title);
-        });
+            statsText.setText(statsText.getText() +
+                    String.format("\n\nMost Popular Song: %s (%d views)",
+                            songTitle, mostPopular.get().getValue()));
+        }
 
-        TableColumn<Annotation, String> textCol = new TableColumn<>("Annotation");
-        textCol.setCellValueFactory(new PropertyValueFactory<>("text"));
-
-        TableColumn<Annotation, Integer> startCol = new TableColumn<>("Start Line");
-        startCol.setCellValueFactory(new PropertyValueFactory<>("startLine"));
-
-        TableColumn<Annotation, Integer> endCol = new TableColumn<>("End Line");
-        endCol.setCellValueFactory(new PropertyValueFactory<>("endLine"));
-
-        annotationsTable.getColumns().addAll(songCol, textCol, startCol, endCol);
-        annotationsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-
-        // Annotation Actions
-        HBox annotationActions = new HBox(10);
-        Button addAnnotationBtn = new Button("Add Annotation");
-        addAnnotationBtn.setOnAction(e -> showAddAnnotationDialog());
-
-        Button editAnnotationBtn = new Button("Edit Selected");
-        editAnnotationBtn.setDisable(true); // Implementation omitted for brevity
-
-        annotationActions.getChildren().addAll(addAnnotationBtn, editAnnotationBtn);
-        tabContent.getChildren().addAll(annotationsTable, annotationActions);
-
+        tabContent.getChildren().addAll(statsLabel, statsText);
         return tabContent;
     }
 
@@ -257,7 +202,7 @@ public class ArtistDashboard {
         grid.add(titleField, 1, 0);
         grid.add(new Label("Lyrics:"), 0, 1);
         grid.add(lyricsArea, 1, 1);
-        grid.add(new Label("Length (seconds):"), 0, 2);
+        grid.add(new Label("Duration (seconds):"), 0, 2);
         grid.add(lengthField, 1, 2);
 
         dialog.getDialogPane().setContent(grid);
@@ -266,15 +211,21 @@ public class ArtistDashboard {
         dialog.setResultConverter(buttonType -> {
             if (buttonType == ButtonType.OK) {
                 try {
-                    return new Song(
+                    Song newSong = new Song(
                             UUID.randomUUID().toString(),
                             titleField.getText(),
                             lyricsArea.getText(),
-                            Integer.parseInt(lengthField.getText())
+                            Integer.parseInt(lengthField.getText()),
+                            Main.currentUser.getUsername()
                     );
+
+                    DataStorage.saveSong(newSong);
+                    SongStorage.saveSong(newSong);
+                    return newSong;
                 } catch (NumberFormatException e) {
-                    new Alert(Alert.AlertType.ERROR, "Please enter a valid number for length").show();
-                    return null;
+                    new Alert(Alert.AlertType.ERROR, "Please enter a valid number for duration").show();
+                } catch (IOException e) {
+                    new Alert(Alert.AlertType.ERROR, "Failed to save song: " + e.getMessage()).show();
                 }
             }
             return null;
@@ -284,106 +235,62 @@ public class ArtistDashboard {
         result.ifPresent(song -> {
             songs.add(song);
             songViews.put(song.getId(), 0);
-            songAnnotations.put(song.getId(), new ArrayList<>());
+            HomeScreen.refreshSongList();
         });
     }
 
     private static void showEditSongDialog(Song song) {
-        // Similar to add dialog but with existing values
-        // Implementation omitted for brevity
-    }
-
-    private static void showAddAnnotationDialog() {
-        Dialog<Annotation> dialog = new Dialog<>();
-        dialog.setTitle("Add Annotation");
+        Dialog<Song> dialog = new Dialog<>();
+        dialog.setTitle("Edit Song");
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
 
-        ComboBox<Song> songCombo = new ComboBox<>(songs);
-        songCombo.setPromptText("Select song");
+        TextField titleField = new TextField(song.getTitle());
+        TextArea lyricsArea = new TextArea(song.getLyrics());
+        TextField lengthField = new TextField(String.valueOf(song.getDuration()));
 
-        TextField startLineField = new TextField();
-        TextField endLineField = new TextField();
-        TextArea annotationArea = new TextArea();
-
-        grid.add(new Label("Song:"), 0, 0);
-        grid.add(songCombo, 1, 0);
-        grid.add(new Label("Start Line:"), 0, 1);
-        grid.add(startLineField, 1, 1);
-        grid.add(new Label("End Line:"), 0, 2);
-        grid.add(endLineField, 1, 2);
-        grid.add(new Label("Annotation:"), 0, 3);
-        grid.add(annotationArea, 1, 3);
+        grid.add(new Label("Title:"), 0, 0);
+        grid.add(titleField, 1, 0);
+        grid.add(new Label("Lyrics:"), 0, 1);
+        grid.add(lyricsArea, 1, 1);
+        grid.add(new Label("Duration (seconds):"), 0, 2);
+        grid.add(lengthField, 1, 2);
 
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
         dialog.setResultConverter(buttonType -> {
-            if (buttonType == ButtonType.OK && songCombo.getValue() != null) {
+            if (buttonType == ButtonType.OK) {
                 try {
-                    return new Annotation(
-                            songCombo.getValue().getId(),
-                            Integer.parseInt(startLineField.getText()),
-                            Integer.parseInt(endLineField.getText()),
-                            annotationArea.getText()
-                    );
+                    song.setTitle(titleField.getText());
+                    song.setLyrics(lyricsArea.getText());
+                    song.setDuration(Integer.parseInt(lengthField.getText()));
+
+                    DataStorage.saveSong(song);
+                    SongStorage.saveSong(song);
+                    return song;
                 } catch (NumberFormatException e) {
-                    new Alert(Alert.AlertType.ERROR, "Please enter valid line numbers").show();
-                    return null;
+                    new Alert(Alert.AlertType.ERROR, "Please enter a valid number for duration").show();
+                } catch (IOException e) {
+                    new Alert(Alert.AlertType.ERROR, "Failed to update song: " + e.getMessage()).show();
                 }
             }
             return null;
         });
 
-        Optional<Annotation> result = dialog.showAndWait();
-        result.ifPresent(annotation -> {
-            songAnnotations.get(annotation.getSongId()).add(annotation);
-        });
+        dialog.showAndWait();
     }
 
-    // Helper classes
-    public static class Song {
-        private String id;
-        private String title;
-        private String lyrics;
-        private int lengthSeconds;
-
-        public Song(String id, String title, String lyrics, int lengthSeconds) {
-            this.id = id;
-            this.title = title;
-            this.lyrics = lyrics;
-            this.lengthSeconds = lengthSeconds;
+    private static void deleteSong(Song song) {
+        try {
+            DataStorage.deleteSong(song.getId());
+            SongStorage.deleteSong(song.getId());
+            songs.remove(song);
+            songViews.remove(song.getId());
+        } catch (IOException e) {
+            new Alert(Alert.AlertType.ERROR, "Failed to delete song: " + e.getMessage()).show();
         }
-
-        // Getters
-        public String getId() { return id; }
-        public String getTitle() { return title; }
-        public String getLyrics() { return lyrics; }
-        public String getLyricsPreview() {
-            return lyrics.length() > 50 ? lyrics.substring(0, 50) + "..." : lyrics;
-        }
-        public int getLengthSeconds() { return lengthSeconds; }
-    }
-
-    public static class Annotation {
-        private String songId;
-        private int startLine;
-        private int endLine;
-        private String text;
-
-        public Annotation(String songId, int startLine, int endLine, String text) {
-            this.songId = songId;
-            this.startLine = startLine;
-            this.endLine = endLine;
-            this.text = text;
-        }
-
-        // Getters
-        public String getSongId() { return songId; }
-        public int getStartLine() { return startLine; }
-        public int getEndLine() { return endLine; }
-        public String getText() { return text; }
     }
 }

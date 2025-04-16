@@ -1,5 +1,6 @@
 package genius;
 
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -14,54 +15,66 @@ import java.util.Map;
 
 public class AdminDashboard {
     public static void show() {
+        // Initialize artist verification data
+        ArtistVerification.loadRequests();
+
         BorderPane layout = new BorderPane();
         layout.setPadding(new Insets(20));
 
-        Label welcomeLabel = new Label("Welcome, " + Main.currentUser.getUsername() + "!");
-        welcomeLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        // Create top bar with welcome message and buttons
+        HBox topBar = new HBox(10);
+        topBar.setPadding(new Insets(0, 0, 20, 0));
 
-        Label infoLabel = new Label("You are logged in as an administrator.");
-        infoLabel.setTextFill(Color.BLUE);
+        Label welcomeLabel = new Label("Welcome, Admin " + Main.currentUser.getUsername() + "!");
+        welcomeLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
-        // Tab pane for different admin sections
-        TabPane tabPane = new TabPane();
+        Button changePasswordBtn = new Button("Change Password");
+        changePasswordBtn.setOnAction(e -> ChangePasswordScreen.show());
 
-        // User Management Tab
-        Tab userTab = new Tab("User Management");
-        userTab.setContent(createUserManagementContent());
-        userTab.setClosable(false);
-
-        // Artist Verification Tab
-        Tab artistTab = new Tab("Artist Verification");
-        artistTab.setContent(createArtistVerificationContent());
-        artistTab.setClosable(false);
-
-        tabPane.getTabs().addAll(userTab, artistTab);
-        layout.setCenter(tabPane);
-
-        // Footer with logout button
-        HBox footer = new HBox(10);
         Button logoutBtn = new Button("Logout");
         logoutBtn.setOnAction(e -> {
             Main.currentUser = null;
             LoginScreen.show();
         });
-        footer.getChildren().add(logoutBtn);
-        layout.setBottom(footer);
 
-        Scene scene = new Scene(layout, 800, 600);
+        // Add spacer to push buttons to the right
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        topBar.getChildren().addAll(welcomeLabel, spacer, changePasswordBtn, logoutBtn);
+        layout.setTop(topBar);
+
+        TabPane tabPane = new TabPane();
+
+        // User Management Tab
+        Tab userManagementTab = new Tab("User Management");
+        userManagementTab.setContent(createUserManagementTab());
+        userManagementTab.setClosable(false);
+
+        // Artist Verification Tab
+        Tab artistVerificationTab = new Tab("Artist Verification");
+        artistVerificationTab.setContent(createArtistVerificationTab());
+        artistVerificationTab.setClosable(false);
+
+        tabPane.getTabs().addAll(userManagementTab, artistVerificationTab);
+        layout.setCenter(tabPane);
+
+        Scene scene = new Scene(layout, 900, 600);
         Main.primaryStage.setScene(scene);
         Main.primaryStage.setTitle("Admin Dashboard");
         Main.primaryStage.show();
     }
 
-    private static VBox createUserManagementContent() {
+    private static VBox createUserManagementTab() {
         VBox content = new VBox(10);
+        content.setPadding(new Insets(15));
 
-        // Table for user management
+        // User Table
         TableView<User> userTable = new TableView<>();
         ObservableList<User> users = FXCollections.observableArrayList(UserStorage.getAllUsers().values());
+        userTable.setItems(users);
 
+        // Table Columns
         TableColumn<User, String> usernameCol = new TableColumn<>("Username");
         usernameCol.setCellValueFactory(new PropertyValueFactory<>("username"));
 
@@ -69,20 +82,23 @@ public class AdminDashboard {
         emailCol.setCellValueFactory(new PropertyValueFactory<>("email"));
 
         TableColumn<User, Boolean> adminCol = new TableColumn<>("Admin");
-        adminCol.setCellValueFactory(new PropertyValueFactory<>("admin"));
+        adminCol.setCellValueFactory(cellData ->
+                new SimpleBooleanProperty(cellData.getValue().isAdmin()));
 
         TableColumn<User, Boolean> artistCol = new TableColumn<>("Artist");
-        artistCol.setCellValueFactory(new PropertyValueFactory<>("artist"));
+        artistCol.setCellValueFactory(cellData ->
+                new SimpleBooleanProperty(cellData.getValue().isArtist()));
 
         TableColumn<User, Boolean> verifiedCol = new TableColumn<>("Verified");
-        verifiedCol.setCellValueFactory(new PropertyValueFactory<>("verified"));
+        verifiedCol.setCellValueFactory(cellData ->
+                new SimpleBooleanProperty(cellData.getValue().isVerified()));
 
         userTable.getColumns().addAll(usernameCol, emailCol, adminCol, artistCol, verifiedCol);
         userTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
-        // Admin controls
-        HBox adminControls = new HBox(10);
-        Button promoteBtn = new Button("Promote/Demote Admin");
+        // Admin Controls
+        HBox controls = new HBox(10);
+        Button promoteBtn = new Button("Promote/Demote");
         promoteBtn.setOnAction(e -> {
             User selected = userTable.getSelectionModel().getSelectedItem();
             if (selected != null && !selected.getUsername().equals("admin")) {
@@ -101,52 +117,58 @@ public class AdminDashboard {
             }
         });
 
-        adminControls.getChildren().addAll(promoteBtn, banBtn);
-        content.getChildren().addAll(userTable, adminControls);
+        controls.getChildren().addAll(promoteBtn, banBtn);
+        content.getChildren().addAll(userTable, controls);
 
         return content;
     }
 
-    private static VBox createArtistVerificationContent() {
+    private static VBox createArtistVerificationTab() {
         VBox content = new VBox(10);
+        content.setPadding(new Insets(15));
 
-        // Table for artist verification
-        TableView<Map.Entry<String, String>> requestsTable = new TableView<>();
-        ObservableList<Map.Entry<String, String>> requests = FXCollections.observableArrayList(
-                ArtistVerification.getPendingRequests().entrySet()
-        );
+        // Artist Verification Table
+        TableView<Map.Entry<String, String>> verificationTable = new TableView<>();
+        ObservableList<Map.Entry<String, String>> requests =
+                FXCollections.observableArrayList(ArtistVerification.getPendingRequests().entrySet());
+        verificationTable.setItems(requests);
 
-        TableColumn<Map.Entry<String, String>, String> userCol = new TableColumn<>("Username");
-        userCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getKey()));
+        // Table Columns
+        TableColumn<Map.Entry<String, String>, String> usernameCol = new TableColumn<>("Username");
+        usernameCol.setCellValueFactory(param ->
+                new SimpleStringProperty(param.getValue().getKey()));
 
         TableColumn<Map.Entry<String, String>, String> bioCol = new TableColumn<>("Artist Bio");
-        bioCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getValue()));
+        bioCol.setCellValueFactory(param ->
+                new SimpleStringProperty(param.getValue().getValue()));
 
-        requestsTable.getColumns().addAll(userCol, bioCol);
-        requestsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        verificationTable.getColumns().addAll(usernameCol, bioCol);
+        verificationTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
-        // Verification controls
-        HBox verifyControls = new HBox(10);
+        // Verification Controls
+        HBox controls = new HBox(10);
         Button verifyBtn = new Button("Verify Artist");
         verifyBtn.setOnAction(e -> {
-            Map.Entry<String, String> selected = requestsTable.getSelectionModel().getSelectedItem();
+            Map.Entry<String, String> selected = verificationTable.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 ArtistVerification.approveRequest(selected.getKey());
                 requests.remove(selected);
+                verificationTable.refresh();
             }
         });
 
         Button rejectBtn = new Button("Reject");
         rejectBtn.setOnAction(e -> {
-            Map.Entry<String, String> selected = requestsTable.getSelectionModel().getSelectedItem();
+            Map.Entry<String, String> selected = verificationTable.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 ArtistVerification.rejectRequest(selected.getKey());
                 requests.remove(selected);
+                verificationTable.refresh();
             }
         });
 
-        verifyControls.getChildren().addAll(verifyBtn, rejectBtn);
-        content.getChildren().addAll(requestsTable, verifyControls);
+        controls.getChildren().addAll(verifyBtn, rejectBtn);
+        content.getChildren().addAll(verificationTable, controls);
 
         return content;
     }

@@ -1,36 +1,38 @@
 package genius;
 
-import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.geometry.*;
 
 public class UserDashboard {
     public static void show() {
-        VBox layout = new VBox(10);
+        BorderPane layout = new BorderPane();
         layout.setPadding(new Insets(20));
 
-        Label welcomeLabel = new Label("Welcome, " + Main.currentUser.getUsername() + "!");
-        welcomeLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
-
-        Label infoLabel = new Label("You are logged in.");
-        infoLabel.setTextFill(Color.BLUE);
-
-        Button changePasswordBtn = new Button("Change Password");
-        changePasswordBtn.setOnAction(e -> ChangePasswordScreen.show());
-
+        // Top navigation
+        HBox topBar = new HBox(10);
+        Button homeBtn = new Button("Home");
+        Button profileBtn = new Button("My Profile");
         Button logoutBtn = new Button("Logout");
+
+        homeBtn.setOnAction(e -> HomeScreen.show());
+        profileBtn.setOnAction(e -> UserProfileScreen.show(Main.currentUser));
         logoutBtn.setOnAction(e -> {
             Main.currentUser = null;
-            LoginScreen.show();
+            MainMenuScreen.show();
         });
 
-        layout.getChildren().addAll(welcomeLabel, infoLabel, changePasswordBtn, logoutBtn);
-        Scene scene = new Scene(layout, 350, 250);
-        Main.primaryStage.setScene(scene);
-        Main.primaryStage.setTitle("User Dashboard");
-        Main.primaryStage.show();
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        topBar.getChildren().addAll(homeBtn, profileBtn, spacer, logoutBtn);
+        layout.setTop(topBar);
+
+        // Main content
+        Label welcomeLabel = new Label("Welcome, " + Main.currentUser.getUsername() + "!");
+        welcomeLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        layout.setCenter(welcomeLabel);
+
+        Main.primaryStage.setScene(new Scene(layout, 800, 600));
     }
 }

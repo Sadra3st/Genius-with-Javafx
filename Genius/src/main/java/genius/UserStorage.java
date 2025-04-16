@@ -1,10 +1,9 @@
 package genius;
 
 import java.io.*;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+
+import static genius.DataStorage.DATA_DIR;
 
 public class UserStorage {
     private static final String FILE_PATH = "users.txt";
@@ -135,5 +134,32 @@ public class UserStorage {
         }
         users.remove(username);
         saveUsers();
+    }
+    // Add to DataStorage class
+    public static void saveComment(Comment comment) throws IOException {
+        String commentsDir = DATA_DIR + "comments/";
+        new File(commentsDir).mkdirs();
+
+        String commentFile = commentsDir + comment.getId() + ".comment";
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(commentFile))) {
+            oos.writeObject(comment);
+        }
+    }
+
+    public static List<Comment> loadSongComments(String songId) throws IOException, ClassNotFoundException {
+        List<Comment> comments = new ArrayList<>();
+        File[] files = new File(DATA_DIR + "comments/").listFiles((dir, name) -> name.endsWith(".comment"));
+
+        if (files != null) {
+            for (File file : files) {
+                try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                    Comment comment = (Comment) ois.readObject();
+                    if (comment.getSongId().equals(songId)) {
+                        comments.add(comment);
+                    }
+                }
+            }
+        }
+        return comments;
     }
 }

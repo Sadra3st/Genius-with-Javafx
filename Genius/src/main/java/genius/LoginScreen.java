@@ -61,21 +61,20 @@ public class LoginScreen {
                     UserDashboard.show();
                 }
             } else {
-                User userObj = UserStorage.getUser(user);
-                if (userObj != null && userObj.isArtist() && !userObj.isVerified()) {
-                    message.setText("Your artist account is pending verification.");
-                } else {
-                    message.setText("Invalid credentials.");
-                }
+                message.setText("Invalid credentials.");
             }
         });
+
+        Button backBtn = new Button("Back to Menu");
+        backBtn.setOnAction(e -> MainMenuScreen.show());
 
         Button registerBtn = new Button("Go to Register");
         registerBtn.setOnAction(e -> RegisterScreen.show());
 
         layout.getChildren().addAll(title, username, passwordField, visiblePassword,
-                showPassword, loginBtn, registerBtn, message);
-        Scene scene = new Scene(layout, 350, 350);
+                showPassword, loginBtn, registerBtn, backBtn, message);
+
+        Scene scene = new Scene(layout, 350, 400);
         Main.primaryStage.setScene(scene);
         Main.primaryStage.setTitle("Login");
         Main.primaryStage.show();

@@ -1,3 +1,4 @@
-sadra|12345678|sadra3st@gmail.com|false|true|true
+Babak|babak123|babak@gmail.com|false|false|true
+artist|artist123|artist@gmail.com|false|true|true
+sadra|12345678|sadra3st@gmail.com|true|true|true
 admin|admin123|admin@genius.com|true|false|true
-
