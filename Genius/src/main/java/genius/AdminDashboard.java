@@ -9,19 +9,19 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
+
 
 import java.util.Map;
 
 public class AdminDashboard {
-    public static void show() {
-        // Initialize artist verification data
-        ArtistVerification.loadRequests();
+    private static ObservableList<User> userListRef;
+    private static TableView<User> userTableRef;
 
+    public static void show() {
+        ArtistVerification.loadRequests();
         BorderPane layout = new BorderPane();
         layout.setPadding(new Insets(20));
 
-        // Create top bar with welcome message and buttons
         HBox topBar = new HBox(10);
         topBar.setPadding(new Insets(0, 0, 20, 0));
 
@@ -37,7 +37,7 @@ public class AdminDashboard {
             LoginScreen.show();
         });
 
-        // Add spacer to push buttons to the right
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -46,12 +46,12 @@ public class AdminDashboard {
 
         TabPane tabPane = new TabPane();
 
-        // User Management Tab
+
         Tab userManagementTab = new Tab("User Management");
         userManagementTab.setContent(createUserManagementTab());
         userManagementTab.setClosable(false);
 
-        // Artist Verification Tab
+
         Tab artistVerificationTab = new Tab("Artist Verification");
         artistVerificationTab.setContent(createArtistVerificationTab());
         artistVerificationTab.setClosable(false);
@@ -65,16 +65,19 @@ public class AdminDashboard {
         Main.primaryStage.show();
     }
 
+
     private static VBox createUserManagementTab() {
         VBox content = new VBox(10);
         content.setPadding(new Insets(15));
 
-        // User Table
+
         TableView<User> userTable = new TableView<>();
         ObservableList<User> users = FXCollections.observableArrayList(UserStorage.getAllUsers().values());
         userTable.setItems(users);
+        userListRef = users;
+        userTableRef = userTable;
 
-        // Table Columns
+
         TableColumn<User, String> usernameCol = new TableColumn<>("Username");
         usernameCol.setCellValueFactory(new PropertyValueFactory<>("username"));
 
@@ -96,7 +99,7 @@ public class AdminDashboard {
         userTable.getColumns().addAll(usernameCol, emailCol, adminCol, artistCol, verifiedCol);
         userTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
-        // Admin Controls
+
         HBox controls = new HBox(10);
         Button promoteBtn = new Button("Promote/Demote");
         promoteBtn.setOnAction(e -> {
@@ -127,48 +130,47 @@ public class AdminDashboard {
         VBox content = new VBox(10);
         content.setPadding(new Insets(15));
 
-        // Artist Verification Table
-        TableView<Map.Entry<String, String>> verificationTable = new TableView<>();
+        TableView<Map.Entry<String, String>> table = new TableView<>();
         ObservableList<Map.Entry<String, String>> requests =
                 FXCollections.observableArrayList(ArtistVerification.getPendingRequests().entrySet());
-        verificationTable.setItems(requests);
+        table.setItems(requests);
 
-        // Table Columns
-        TableColumn<Map.Entry<String, String>, String> usernameCol = new TableColumn<>("Username");
-        usernameCol.setCellValueFactory(param ->
-                new SimpleStringProperty(param.getValue().getKey()));
+        TableColumn<Map.Entry<String, String>, String> userCol = new TableColumn<>("Username");
+        userCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getKey()));
 
         TableColumn<Map.Entry<String, String>, String> bioCol = new TableColumn<>("Artist Bio");
-        bioCol.setCellValueFactory(param ->
-                new SimpleStringProperty(param.getValue().getValue()));
+        bioCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getValue()));
 
-        verificationTable.getColumns().addAll(usernameCol, bioCol);
-        verificationTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.getColumns().addAll(userCol, bioCol);
 
-        // Verification Controls
-        HBox controls = new HBox(10);
-        Button verifyBtn = new Button("Verify Artist");
-        verifyBtn.setOnAction(e -> {
-            Map.Entry<String, String> selected = verificationTable.getSelectionModel().getSelectedItem();
+        HBox buttons = new HBox(10);
+        Button approveBtn = new Button("Approve");
+        approveBtn.setOnAction(e -> {
+            Map.Entry<String, String> selected = table.getSelectionModel().getSelectedItem();
             if (selected != null) {
-                ArtistVerification.approveRequest(selected.getKey());
+                String username = selected.getKey();
+                ArtistVerification.approveRequest(username);
                 requests.remove(selected);
-                verificationTable.refresh();
+                userListRef.setAll(UserStorage.getAllUsers().values());
+                userTableRef.refresh();
+
+                new Alert(Alert.AlertType.INFORMATION,
+                        "Artist approved and reflected in user list.").show();
             }
         });
+        ;
 
         Button rejectBtn = new Button("Reject");
         rejectBtn.setOnAction(e -> {
-            Map.Entry<String, String> selected = verificationTable.getSelectionModel().getSelectedItem();
+            Map.Entry<String, String> selected = table.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 ArtistVerification.rejectRequest(selected.getKey());
                 requests.remove(selected);
-                verificationTable.refresh();
             }
         });
 
-        controls.getChildren().addAll(verifyBtn, rejectBtn);
-        content.getChildren().addAll(verificationTable, controls);
+        buttons.getChildren().addAll(approveBtn, rejectBtn);
+        content.getChildren().addAll(table, buttons);
 
         return content;
     }

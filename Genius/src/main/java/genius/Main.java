@@ -15,18 +15,13 @@ public class Main extends Application {
     @Override
     public void start(Stage primaryStage) {
         try {
-            // Initialize components
-            UserStorage.initialize();
             ArtistVerification.loadRequests();
 
-            // Set up primary stage
             Main.primaryStage = primaryStage;
             Main.primaryStage.setTitle("Genius App");
 
-            // Show main menu
             MainMenuScreen.show();
 
-            // CRUCIAL: Make sure to show the stage
             primaryStage.show();
         } catch (Exception e) {
             e.printStackTrace();

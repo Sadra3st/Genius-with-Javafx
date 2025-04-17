@@ -10,7 +10,6 @@ public class UserDashboard {
         BorderPane layout = new BorderPane();
         layout.setPadding(new Insets(20));
 
-        // Top navigation
         HBox topBar = new HBox(10);
         Button homeBtn = new Button("Home");
         Button profileBtn = new Button("My Profile");

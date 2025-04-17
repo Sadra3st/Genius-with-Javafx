@@ -4,21 +4,34 @@ import java.io.*;
 import java.util.*;
 
 public class ArtistVerification {
+    private static final String REQUESTS_FILE = "data/artist_requests.txt";
+    private static Map<String, String> pendingRequests = new HashMap<>();
 
-    private static final String REQUESTS_FILE = "artist_requests.txt";
-    private static Map<String, String> pendingRequests = new HashMap<>(); // username -> bio
+    static {
+        loadRequests();
+    }
 
     public static void loadRequests() {
-        try (BufferedReader reader = new BufferedReader(new FileReader(REQUESTS_FILE))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split("\\|");
-                if (parts.length == 2) {
-                    pendingRequests.put(parts[0], parts[1]);
+        try {
+            File file = new File(REQUESTS_FILE);
+            if (!file.exists()) {
+                file.getParentFile().mkdirs();
+                file.createNewFile();
+                return;
+            }
+
+            pendingRequests.clear();
+            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split("\\|", 2);
+                    if (parts.length == 2) {
+                        pendingRequests.put(parts[0], parts[1]);
+                    }
                 }
             }
         } catch (IOException e) {
-            // File doesn't exist yet
+            System.err.println("Error loading artist requests: " + e.getMessage());
         }
     }
 
@@ -33,10 +46,16 @@ public class ArtistVerification {
             user.setArtist(true);
             user.setVerified(true);
             UserStorage.updateUser(user);
+            if (ArtistStorage.getArtistByUsername(username) == null) {
+                Artist artist = new Artist(UUID.randomUUID().toString(), username);
+                artist.setBio(pendingRequests.get(username)); // include bio from request
+                ArtistStorage.saveArtist(artist);
+            }
             pendingRequests.remove(username);
             saveRequests();
         }
     }
+
 
     public static void rejectRequest(String username) {
         pendingRequests.remove(username);

@@ -19,7 +19,7 @@ public class Artist implements Serializable {
         this.followerCount = 0;
     }
 
-    // Getters and setters
+
     public String getId() { return id; }
     public String getUsername() { return username; }
     public String getBio() { return bio; }
@@ -29,7 +29,6 @@ public class Artist implements Serializable {
     public void setBio(String bio) { this.bio = bio; }
     public void setUsername(String username) { this.username = username; }
 
-    // Methods
     public void addFollower() { followerCount++; }
     public void removeFollower() { followerCount--; }
     public void addSong(String songId) { songIds.add(songId); }

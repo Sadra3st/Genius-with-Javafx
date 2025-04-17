@@ -5,7 +5,6 @@ import javafx.geometry.*;
 import javafx.scene.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.text.*;
 
 import java.io.IOException;
 import java.util.*;
@@ -18,7 +17,6 @@ public class UserProfileScreen {
         layout.setPadding(new Insets(20));
         layout.setAlignment(Pos.TOP_CENTER);
 
-        // Header with back button
         HBox header = new HBox(10);
         Button backBtn = new Button("← Back");
         backBtn.setOnAction(e -> returnToDashboard(user));
@@ -32,7 +30,7 @@ public class UserProfileScreen {
         header.getChildren().addAll(backBtn, spacer, titleLabel);
         layout.getChildren().add(header);
 
-        // User info section
+
         VBox infoBox = new VBox(10);
         infoBox.setPadding(new Insets(20));
         infoBox.setStyle("-fx-background-color: #f5f5f5; -fx-border-radius: 5;");
@@ -40,17 +38,34 @@ public class UserProfileScreen {
         Label emailLabel = new Label("Email: " + user.getEmail());
         Label memberSinceLabel = new Label("Member since: " + getRegistrationDate(user));
         Label artistStatusLabel = new Label("Artist: " + (user.isArtist() ? "✓ Verified" : "Regular user"));
+        if (user.isArtist() && user.isVerified() && !user.getUsername().equals(Main.currentUser.getUsername())) {
+            Button followBtn = new Button();
+
+            boolean alreadyFollowing = UserStorage.isFollowing(Main.currentUser.getUsername(), user.getUsername());
+            followBtn.setText(alreadyFollowing ? "Unfollow" : "Follow");
+
+            followBtn.setOnAction(e -> {
+                if (UserStorage.isFollowing(Main.currentUser.getUsername(), user.getUsername())) {
+                    UserStorage.unfollowArtist(Main.currentUser.getUsername(), user.getUsername());
+                    followBtn.setText("Follow");
+                } else {
+                    UserStorage.followArtist(Main.currentUser.getUsername(), user.getUsername());
+                    followBtn.setText("Unfollow");
+                }
+            });
+
+            infoBox.getChildren().add(followBtn);
+        }
 
         infoBox.getChildren().addAll(emailLabel, memberSinceLabel, artistStatusLabel);
 
-        // Real Activity Statistics
+
         VBox statsBox = new VBox(10);
         statsBox.setPadding(new Insets(15));
 
         Label statsLabel = new Label("Activity Statistics");
         statsLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
-        // Calculate real statistics
         int commentCount = DataStorage.countUserComments(user.getUsername());
         int likeCount = countUserLikes(user.getUsername());
         int followingCount = UserStorage.countFollowing(user.getUsername());
@@ -71,7 +86,6 @@ public class UserProfileScreen {
 
         statsBox.getChildren().addAll(statsLabel, statsGrid);
 
-        // Followed Artists section
         if (followingCount > 0) {
             VBox followingBox = new VBox(10);
             followingBox.setPadding(new Insets(15));
@@ -94,7 +108,7 @@ public class UserProfileScreen {
             layout.getChildren().add(followingBox);
         }
 
-        // Recent Comments section
+
         if (commentCount > 0) {
             VBox commentsBox = new VBox(10);
             commentsBox.setPadding(new Insets(15));
@@ -176,7 +190,8 @@ public class UserProfileScreen {
     }
 
     private static String getRegistrationDate(User user) {
-        // This should be replaced with actual registration date from user object
-        return "January 2023"; // Placeholder
+        // This should be replaced with actual registration date
+        return "April 2025"; //
     }
+
 }

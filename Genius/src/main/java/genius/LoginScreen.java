@@ -41,29 +41,7 @@ public class LoginScreen {
 
         Button loginBtn = new Button("Login");
         loginBtn.setDefaultButton(true);
-        loginBtn.setOnAction(e -> {
-            String user = username.getText().trim();
-            String pass = passwordField.getText().trim();
-
-            if (user.isEmpty() || pass.isEmpty()) {
-                message.setText("Please fill all fields.");
-                return;
-            }
-
-            if (UserStorage.validateLogin(user, pass)) {
-                Main.currentUser = UserStorage.getUser(user);
-                message.setText("Login successful!");
-                if (Main.currentUser.isAdmin()) {
-                    AdminDashboard.show();
-                } else if (Main.currentUser.isArtist()) {
-                    ArtistDashboard.show();
-                } else {
-                    UserDashboard.show();
-                }
-            } else {
-                message.setText("Invalid credentials.");
-            }
-        });
+        loginBtn.setOnAction(e -> handleLogin(username, passwordField, message));
 
         Button backBtn = new Button("Back to Menu");
         backBtn.setOnAction(e -> MainMenuScreen.show());
@@ -79,4 +57,46 @@ public class LoginScreen {
         Main.primaryStage.setTitle("Login");
         Main.primaryStage.show();
     }
-}
+
+    private static void handleLogin(TextField usernameField, PasswordField passwordField, Label messageLabel) {
+        String username = usernameField.getText().trim();
+        String password = passwordField.getText().trim();
+
+        if (username.isEmpty() || password.isEmpty()) {
+            messageLabel.setText("Please fill all fields.");
+            return;
+        }
+
+        System.out.println("Attempting login for: " + username);
+
+        try {
+            if (UserStorage.validateLogin(username, password)) {
+                System.out.println("Login validated!");
+
+                Main.currentUser = UserStorage.getUser(username.toLowerCase());
+                if (Main.currentUser == null) {
+                    System.out.println("User returned is NULL");
+                    messageLabel.setText("User not found.");
+                    return;
+                }
+
+                System.out.println("User loaded: " + Main.currentUser.getUsername());
+                System.out.println("Admin: " + Main.currentUser.isAdmin());
+                System.out.println("Artist: " + Main.currentUser.isArtist());
+
+                if (Main.currentUser.isAdmin()) {
+                    AdminDashboard.show();
+                } else if (Main.currentUser.isArtist()) {
+                    ArtistDashboard.show();
+                } else {
+                    UserDashboard.show();
+                }
+            } else {
+                messageLabel.setText("Invalid username or password");
+            }
+        } catch (Exception e) {
+            e.printStackTrace(); // THIS is what will show your real error
+            messageLabel.setText("System error during login");
+        }
+    }
+    }

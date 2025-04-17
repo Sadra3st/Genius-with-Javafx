@@ -1,78 +1,135 @@
 package genius;
 
 import javafx.collections.FXCollections;
+import javafx.geometry.*;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.geometry.*;
+import javafx.scene.text.*;
+
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class HomeScreen {
-    private static ListView<Song> songList; // Declare as static field
+    private static ListView<Object> displayList;
 
     public static void show() {
         BorderPane layout = new BorderPane();
         layout.setPadding(new Insets(20));
 
-        // Top bar with back button
         HBox topBar = new HBox(10);
         topBar.setPadding(new Insets(0, 0, 20, 0));
+
+        TextField searchField = new TextField();
+        searchField.setPromptText("Search for artist, song, or album");
+        Button searchBtn = new Button("Search");
+
+        searchBtn.setOnAction(e -> searchEntities(searchField.getText()));
 
         Button backBtn = new Button("← Back");
         backBtn.setOnAction(e -> returnToPreviousScreen());
 
-        Label titleLabel = new Label("Browse Songs");
-        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
-
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        topBar.getChildren().addAll(backBtn, spacer, titleLabel);
+        topBar.getChildren().addAll(backBtn, spacer, searchField, searchBtn);
         layout.setTop(topBar);
 
-        // Song list
-        songList = new ListView<>(); // Initialize the songList
-        refreshSongList();
+        displayList = new ListView<>();
+        refreshTopSongs();
 
-        // Set double-click handler
-        songList.setOnMouseClicked(e -> {
+        displayList.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
-                Song selected = songList.getSelectionModel().getSelectedItem();
-                if (selected != null) {
-                    SongViewScreen.show(selected);
+                Object selected = displayList.getSelectionModel().getSelectedItem();
+                if (selected instanceof Song) {
+                    SongViewScreen.show((Song) selected);
+                } else if (selected instanceof Album) {
+                    AlbumViewScreen.show((Album) selected);
+                } else if (selected instanceof Artist) {
+                    ArtistProfileScreen.show((Artist) selected);
                 }
             }
         });
 
-        layout.setCenter(songList);
+        layout.setCenter(displayList);
 
-        Scene scene = new Scene(layout, 800, 600);
+        Scene scene = new Scene(layout, 900, 600);
         Main.primaryStage.setScene(scene);
     }
 
-    public static void refreshSongList() {
-        List<Song> songs = new ArrayList<>();
-
+    public static void refreshTopSongs() {
         try {
-            // Load from both storage systems
-            songs.addAll(SongStorage.getAllSongs());
-            songs.addAll(DataStorage.loadAllSongs());
+            List<Song> allSongs = new ArrayList<>();
+            allSongs.addAll(SongStorage.getAllSongs());
+            allSongs.addAll(DataStorage.loadAllSongs());
 
-            // Remove duplicates by ID
-            Set<String> seenIds = new HashSet<>();
-            List<Song> uniqueSongs = new ArrayList<>();
-            for (Song song : songs) {
-                if (seenIds.add(song.getId())) {
-                    uniqueSongs.add(song);
+            Map<String, Integer> viewMap = new HashMap<>();
+            for (Song song : allSongs) {
+                int views = DataStorage.loadSongViews(song.getId());
+                viewMap.put(song.getId(), views);
+            }
+
+            allSongs.sort(Comparator.comparingInt(s -> -viewMap.getOrDefault(s.getId(), 0)));
+
+            displayList.setItems(FXCollections.observableArrayList(allSongs));
+        } catch (Exception e) {
+            e.printStackTrace();
+            new Alert(Alert.AlertType.ERROR, "Could not load songs: " + e.getMessage()).show();
+        }
+    }
+
+    public static void searchEntities(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            refreshTopSongs();
+            return;
+        }
+
+        query = query.toLowerCase();
+        List<Object> results = new ArrayList<>();
+
+        for (Song song : SongStorage.getAllSongs()) {
+            if (song.getTitle().toLowerCase().contains(query) ||
+                    song.getArtistId().toLowerCase().contains(query)) {
+                results.add(song);
+            }
+        }
+
+        for (Artist artist : ArtistStorage.getAllArtists()) {
+            if (artist.getUsername().toLowerCase().contains(query)) {
+                results.add(artist);
+            }
+        }
+
+        for (Album album : AlbumStorage.getAllAlbums()) {
+            if (album.getTitle().toLowerCase().contains(query)) {
+                results.add(album);
+            }
+        }
+
+        displayList.setItems(FXCollections.observableArrayList(results));
+    }
+
+    public static void showFollowing() {
+        try {
+            List<String> following = UserStorage.getFollowedArtists(Main.currentUser.getUsername());
+            List<Object> feed = new ArrayList<>();
+
+            for (String artistName : following) {
+                Artist artist = ArtistStorage.getArtistByUsername(artistName);
+                if (artist != null) {
+                    feed.add(artist);
+                    feed.addAll(AlbumStorage.getAlbumsByArtist(artist.getUsername()));
+                    for (Song song : SongStorage.getAllSongs()) {
+                        if (song.getArtistId().equals(artist.getUsername())) {
+                            feed.add(song);
+                        }
+                    }
                 }
             }
 
-            if (songList != null) {
-                songList.setItems(FXCollections.observableArrayList(uniqueSongs));
-            }
+            displayList.setItems(FXCollections.observableArrayList(feed));
         } catch (Exception e) {
-            System.err.println("Error loading songs: " + e.getMessage());
-            new Alert(Alert.AlertType.ERROR, "Could not load songs: " + e.getMessage()).show();
+            new Alert(Alert.AlertType.ERROR, "Error loading following feed: " + e.getMessage()).show();
         }
     }
 

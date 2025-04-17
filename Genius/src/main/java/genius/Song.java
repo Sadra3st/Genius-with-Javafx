@@ -1,89 +1,146 @@
 package genius;
 
-import java.io.IOException;
 import java.io.Serializable;
-import java.lang.annotation.Annotation;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.time.LocalDate;
+import java.util.*;
 
 public class Song implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    private String artistId;
     private String id;
     private String title;
     private String lyrics;
-    private String artistId;
-    private int duration; // in seconds
-    private int likeCount;
-    private int dislikeCount;
-    private List<Annotation> annotations;
+    private String primaryArtist;
+    private List<String> featuredArtists;
+    private String album;
+    private String genre;
+    private List<String> tags;
+    private int views;
+    private LocalDate releaseDate;
+    private Map<String, Boolean> editPermissions;
+    private List<LyricEdit> pendingEdits;
+    private List<Comment> comments;
 
-    public Song(String id, String title, String lyrics, int duration, String artistId) {
+    public Song(String id, String title, String lyrics, String primaryArtist) {
         this.id = id != null ? id : UUID.randomUUID().toString();
-        this.title = title;
-        this.lyrics = lyrics;
-        this.duration = duration;
-        this.artistId = artistId;
-        this.likeCount = 0;
-        this.dislikeCount = 0;
+        this.title = Objects.requireNonNull(title, "Title cannot be null");
+        this.lyrics = Objects.requireNonNull(lyrics, "Lyrics cannot be null");
+        this.artistId = Objects.requireNonNull(artistId, "Artist ID cannot be null");
+        this.primaryArtist = primaryArtist;
+        this.featuredArtists = new ArrayList<>();
+        this.album = "Single";
+        this.genre = "Unknown";
+        this.tags = new ArrayList<>();
+        this.views = 0;
+        this.releaseDate = LocalDate.now();
+        this.editPermissions = new HashMap<>();
+        this.pendingEdits = new ArrayList<>();
         this.comments = new ArrayList<>();
-        this.annotations = new ArrayList<>();
     }
-
 
     public String getId() { return id; }
     public String getTitle() { return title; }
     public String getLyrics() { return lyrics; }
-    public String getArtistId() { return artistId; }
-    public int getDuration() { return duration; }
-    public int getLikeCount() { return likeCount; }
-    public int getDislikeCount() { return dislikeCount; }
-
+    public String getPrimaryArtist() { return primaryArtist; }
+    public String getArtistId() { return artistId;}
+    public List<String> getFeaturedArtists() { return new ArrayList<>(featuredArtists); }
+    public String getAlbum() { return album; }
+    public String getGenre() { return genre; }
+    public List<String> getTags() { return new ArrayList<>(tags); }
+    public int getViews() { return views; }
+    public LocalDate getReleaseDate() { return releaseDate; }
+    public List<LyricEdit> getPendingEdits() { return new ArrayList<>(pendingEdits); }
+    public List<Comment> getComments() { return new ArrayList<>(comments); }
 
     public void setTitle(String title) { this.title = title; }
     public void setLyrics(String lyrics) { this.lyrics = lyrics; }
-    public void setDuration(int duration) { this.duration = duration; }
-    public void setArtistId(String artistId) { this.artistId = artistId; }
+    public void setAlbum(String album) { this.album = album; }
+    public void setGenre(String genre) { this.genre = genre; }
+    public void setReleaseDate(LocalDate releaseDate) { this.releaseDate = releaseDate; }
 
-    // Helper methods
-    public String getLyricsPreview() {
-        return lyrics.length() > 50 ? lyrics.substring(0, 50) + "..." : lyrics;
+    public void addFeaturedArtist(String artist) {
+        if (!featuredArtists.contains(artist)) {
+            featuredArtists.add(artist);
+            editPermissions.put(artist, false);
+        }
     }
 
-
-    public void incrementLikes() { likeCount++; }
-    public void incrementDislikes() { dislikeCount++; }
-
-    @Override
-    public String toString() {
-        return "Song{" +
-                "title='" + title + '\'' +
-                ", artistId='" + artistId + '\'' +
-                ", duration=" + duration +
-                ", likes=" + likeCount +
-                '}';
+    public void removeFeaturedArtist(String artist) {
+        featuredArtists.remove(artist);
+        editPermissions.remove(artist);
     }
-    private transient List<Comment> comments = new ArrayList<>();
+
+    public void addTag(String tag) {
+        if (!tags.contains(tag)) {
+            tags.add(tag);
+        }
+    }
+
+    public void removeTag(String tag) {
+        tags.remove(tag);
+    }
+
+    public void incrementViews() {
+        views++;
+    }
 
     public void addComment(Comment comment) {
         comments.add(comment);
-        try {
-            DataStorage.saveComment(comment);
-        } catch (IOException e) {
-            System.err.println("Failed to save comment: " + e.getMessage());
+    }
+
+    public void suggestLyricEdit(String userId, String newLyrics) {
+        pendingEdits.add(new LyricEdit(userId, newLyrics));
+    }
+
+    public void approveLyricEdit(int editIndex) {
+        if (editIndex >= 0 && editIndex < pendingEdits.size()) {
+            LyricEdit edit = pendingEdits.get(editIndex);
+            lyrics = edit.getNewLyrics();
+            pendingEdits.remove(editIndex);
         }
     }
 
-    public List<Comment> getComments() {
-        if (comments == null) {
-            comments = new ArrayList<>();
-            try {
-                comments = DataStorage.loadSongComments(this.id);
-            } catch (Exception e) {
-                System.err.println("Error loading comments: " + e.getMessage());
-            }
+    public void rejectLyricEdit(int editIndex) {
+        if (editIndex >= 0 && editIndex < pendingEdits.size()) {
+            pendingEdits.remove(editIndex);
         }
-        return comments;
     }
+
+    public void setEditPermission(String artist, boolean allowed) {
+        if (featuredArtists.contains(artist)) {
+            editPermissions.put(artist, allowed);
+        }
+    }
+
+    public boolean canEdit(String artist) {
+        return primaryArtist.equals(artist) ||
+                Boolean.TRUE.equals(editPermissions.get(artist));
+    }
+
+    public List<String> getAllArtists() {
+        List<String> allArtists = new ArrayList<>();
+        allArtists.add(primaryArtist);
+        allArtists.addAll(featuredArtists);
+        return allArtists;
+    }
+
+}
+
+class LyricEdit implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private String userId;
+    private String newLyrics;
+    private LocalDate editDate;
+
+    public LyricEdit(String userId, String newLyrics) {
+        this.userId = userId;
+        this.newLyrics = newLyrics;
+        this.editDate = LocalDate.now();
+    }
+
+    public String getUserId() { return userId; }
+    public String getNewLyrics() { return newLyrics; }
+    public LocalDate getEditDate() { return editDate; }
 }

@@ -6,6 +6,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Text;
+import java.util.regex.Pattern;
 
 public class RegisterScreen {
     public static void show() {
@@ -16,13 +17,13 @@ public class RegisterScreen {
         title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
         TextField username = new TextField();
-        username.setPromptText("Username");
+        username.setPromptText("Username (min 4 characters)");
 
         TextField email = new TextField();
         email.setPromptText("Email");
 
         PasswordField passwordField = new PasswordField();
-        passwordField.setPromptText("Password");
+        passwordField.setPromptText("Password (min 8 characters)");
 
         TextField visiblePassword = new TextField();
         visiblePassword.setManaged(false);
@@ -40,7 +41,8 @@ public class RegisterScreen {
             visiblePassword.setManaged(show);
         });
 
-        CheckBox artistCheckbox = new CheckBox("I am an artist");
+        CheckBox artistCheckbox = new CheckBox("Register as Artist");
+        artistCheckbox.setTooltip(new Tooltip("Artist accounts require admin approval"));
 
         Text passwordStrength = new Text();
         passwordStrength.setFill(Color.GRAY);
@@ -75,7 +77,7 @@ public class RegisterScreen {
                 return;
             }
 
-            if (!userEmail.matches("^[\\w-.]+@([\\w-]+\\.)+[\\w-]{2,4}$")) {
+            if (!isValidEmail(userEmail)) {
                 message.setText("Please enter a valid email address.");
                 return;
             }
@@ -94,28 +96,34 @@ public class RegisterScreen {
                 message.setText("Username already exists.");
             } else if (UserStorage.emailExists(userEmail)) {
                 message.setText("Email already in use.");
-            } else {
-                // Artists start unverified
-                UserStorage.registerUser(user, pass, userEmail, false, isArtist, !isArtist);
-                message.setText("Registration successful! " +
-                        (isArtist ? "Your artist account will be reviewed by an admin." : "You can now login."));
             }
-        }
+            UserStorage.registerUser(user, pass, userEmail, false, false, true); // always register as normal user
 
-        );
+            if (isArtist) {
+                ArtistVerification.submitRequest(user, "New artist application");
+                message.setText("Artist application submitted for admin approval!");
+            } else {
+                message.setText("Registration successful! You can now login.");
+            }
+
+        });
 
         Button backBtn = new Button("Back to Login");
         backBtn.setOnAction(e -> LoginScreen.show());
 
         layout.getChildren().addAll(title, username, email, passwordField, visiblePassword,
                 showPassword, artistCheckbox, passwordStrength, registerBtn, backBtn, message);
-        Scene scene = new Scene(layout, 350, 450);
+
+        Scene scene = new Scene(layout, 350, 500);
         Main.primaryStage.setScene(scene);
         Main.primaryStage.setTitle("Register");
-        Main.primaryStage.show();
     }
 
-    // Rest of the methods remain the same
+    private static boolean isValidEmail(String email) {
+        String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
+        return Pattern.compile(emailRegex).matcher(email).matches();
+    }
+
     public static int calculatePasswordStrength(String password) {
         int strength = 0;
         if (password.length() >= 8) strength++;
