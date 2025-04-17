@@ -52,7 +52,7 @@ public class SongStorage {
     public static List<Song> getSongsByArtist(String artist) {
         List<Song> artistSongs = new ArrayList<>();
         for (Song song : songs.values()) {
-            if (song.getPrimaryArtist().equals(artist) ||
+            if (song.getArtistId().equals(artist) ||
                     song.getFeaturedArtists().contains(artist)) {
                 artistSongs.add(song);
             }

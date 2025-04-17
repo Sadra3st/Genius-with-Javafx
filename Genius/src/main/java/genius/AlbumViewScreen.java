@@ -8,7 +8,6 @@ import javafx.scene.layout.*;
 import javafx.scene.text.Text;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class AlbumViewScreen {
     public static void show(Album album) {
@@ -16,7 +15,7 @@ public class AlbumViewScreen {
         layout.setPadding(new Insets(20));
 
         HBox header = new HBox(10);
-        Button backBtn = new Button("← Back");
+        Button backBtn = new Button("\u2190 Back");
         backBtn.setOnAction(e -> HomeScreen.show());
 
         Label titleLabel = new Label(album.getTitle());
@@ -33,16 +32,26 @@ public class AlbumViewScreen {
 
         Label artistLabel = new Label("Artist: " + album.getArtistUsername());
         Label releaseDateLabel = new Label("Release Date: " + album.getReleaseDate());
+        Label tracksLabel = new Label("Tracks: " + album.getSongIds().size());
 
-        albumInfo.getChildren().addAll(artistLabel, releaseDateLabel);
+        albumInfo.getChildren().addAll(artistLabel, releaseDateLabel, tracksLabel);
 
         ListView<Song> songList = new ListView<>();
         try {
-            List<Song> songs = album.getSongIds().stream()
-                    .map(SongStorage::getSong)
-                    .filter(song -> song != null)
-                    .collect(Collectors.toList());
+            List<Song> songs = SongController.getSongsByAlbum(album.getId());
+
             songList.setItems(FXCollections.observableArrayList(songs));
+            songList.setCellFactory(lv -> new ListCell<Song>() {
+                @Override
+                protected void updateItem(Song song, boolean empty) {
+                    super.updateItem(song, empty);
+                    if (empty || song == null) {
+                        setText(null);
+                    } else {
+                        setText((getIndex() + 1) + ". " + song.getTitle());
+                    }
+                }
+            });
 
             songList.setOnMouseClicked(e -> {
                 if (e.getClickCount() == 2) {

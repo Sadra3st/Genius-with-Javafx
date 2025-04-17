@@ -9,138 +9,228 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
+import javafx.util.StringConverter;
+
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
 public class ArtistDashboard {
     private static ObservableList<Song> songs = FXCollections.observableArrayList();
+    private static ObservableList<Album> albums = FXCollections.observableArrayList();
+    private static TableView<Song> songsTable;
+    private static TableView<Album> albumsTable;
 
     public static void show() {
         BorderPane mainLayout = new BorderPane();
         mainLayout.setPadding(new Insets(20));
 
-        HBox topBar = new HBox(10);
-        topBar.setPadding(new Insets(0, 0, 20, 0));
-
-        Button homeBtn = new Button("Browse Songs");
-        homeBtn.setOnAction(e -> HomeScreen.show());
-
-        Button mySongsBtn = new Button("My Songs");
-        mySongsBtn.setOnAction(e -> loadArtistData());
-
-        Button changePasswordBtn = new Button("Change Password");
-        changePasswordBtn.setOnAction(e -> ChangePasswordScreen.show());
-
-        Button logoutButton = new Button("Logout");
-        logoutButton.setOnAction(e -> {
-            Main.currentUser = null;
-            LoginScreen.show();
-        });
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        topBar.getChildren().addAll(homeBtn, mySongsBtn, spacer, changePasswordBtn, logoutButton);
+        // Top Bar
+        HBox topBar = createTopBar();
         mainLayout.setTop(topBar);
 
+        // Main Content
         TabPane tabPane = new TabPane();
-
-        Tab songsTab = new Tab("My Songs");
-        songsTab.setContent(createSongsTab());
-        songsTab.setClosable(false);
-
-        Tab analyticsTab = new Tab("Analytics");
-        analyticsTab.setContent(createAnalyticsTab());
-        analyticsTab.setClosable(false);
-
-        tabPane.getTabs().addAll(songsTab, analyticsTab);
+        tabPane.getTabs().addAll(
+                createSongsTab(),
+                createAlbumsTab(),
+                createAnalyticsTab()
+        );
         mainLayout.setCenter(tabPane);
 
         loadArtistData();
 
-        Scene scene = new Scene(mainLayout, 800, 600);
+        Scene scene = new Scene(mainLayout, 900, 650);
         Main.primaryStage.setScene(scene);
         Main.primaryStage.setTitle("Artist Dashboard - " + Main.currentUser.getUsername());
-        Main.primaryStage.show();
+    }
+
+    private static HBox createTopBar() {
+        HBox topBar = new HBox(10);
+        topBar.setPadding(new Insets(0, 0, 20, 0));
+
+        Button homeBtn = new Button("Home");
+        homeBtn.setOnAction(e -> HomeScreen.show());
+
+        Button refreshBtn = new Button("Refresh");
+        refreshBtn.setOnAction(e -> loadArtistData());
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Button changePasswordBtn = new Button("Change Password");
+        changePasswordBtn.setOnAction(e -> ChangePasswordScreen.show());
+
+        Button logoutBtn = new Button("Logout");
+        logoutBtn.setOnAction(e -> {
+            Main.currentUser = null;
+            LoginScreen.show();
+        });
+
+        topBar.getChildren().addAll(homeBtn, refreshBtn, spacer, changePasswordBtn, logoutBtn);
+        return topBar;
     }
 
     private static void loadArtistData() {
         songs.clear();
+        albums.clear();
+
         try {
+            // Load songs
             List<Song> loadedSongs = DataStorage.loadArtistSongs(Main.currentUser.getUsername());
-            loadedSongs.removeIf(song -> song == null || song.getArtistId() == null);
             songs.addAll(loadedSongs);
+
+            // Load albums
+            List<Album> loadedAlbums = AlbumStorage.getAlbumsByArtist(Main.currentUser.getUsername());
+            albums.addAll(loadedAlbums);
+
+            // Refresh tables
+            if (songsTable != null) songsTable.refresh();
+            if (albumsTable != null) albumsTable.refresh();
         } catch (Exception e) {
-            new Alert(Alert.AlertType.ERROR, "Could not load artist data").show();
+            showAlert("Error", "Could not load artist data: " + e.getMessage());
         }
     }
 
-    private static VBox createSongsTab() {
-        VBox tabContent = new VBox(15);
-        tabContent.setPadding(new Insets(15));
+    private static Tab createSongsTab() {
+        Tab tab = new Tab("My Songs");
+        tab.setClosable(false);
 
-        TableView<Song> songsTable = new TableView<>();
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(15));
+
+        // Songs Table
+        songsTable = new TableView<>();
+        setupSongsTable();
+
+        // Song Actions
+        HBox actions = new HBox(10);
+        Button addBtn = new Button("Add Song");
+        addBtn.setOnAction(e -> showAddSongDialog());
+
+        Button editBtn = new Button("Edit Selected");
+        editBtn.setOnAction(e -> {
+            Song selected = songsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) showEditSongDialog(selected);
+        });
+
+        Button deleteBtn = new Button("Delete Selected");
+        deleteBtn.setOnAction(e -> {
+            Song selected = songsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) deleteSong(selected);
+        });
+
+        actions.getChildren().addAll(addBtn, editBtn, deleteBtn);
+        content.getChildren().addAll(songsTable, actions);
+        tab.setContent(content);
+
+        return tab;
+    }
+
+    private static void setupSongsTable() {
         songsTable.setItems(songs);
+        songsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         TableColumn<Song, String> titleCol = new TableColumn<>("Title");
         titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
 
         TableColumn<Song, String> artistCol = new TableColumn<>("Artist");
-        artistCol.setCellValueFactory(cell -> {
-            Song song = cell.getValue();
-            return new SimpleStringProperty(song != null ? song.getArtistId() : "");
-        });
+        artistCol.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getArtistId()));
 
         TableColumn<Song, Integer> viewsCol = new TableColumn<>("Views");
-        viewsCol.setCellValueFactory(cell -> {
-            Song song = cell.getValue();
-            return new SimpleIntegerProperty(song != null ? song.getViews() : 0).asObject();
+        viewsCol.setCellValueFactory(cell -> new SimpleIntegerProperty(cell.getValue().getViews()).asObject());
+
+        TableColumn<Song, String> albumCol = new TableColumn<>("Album");
+        albumCol.setCellValueFactory(cell -> {
+            String albumId = cell.getValue().getAlbumId();
+            Album album = AlbumStorage.getAlbumById(albumId);
+            return new SimpleStringProperty(album != null ? album.getTitle() : "Single");
         });
 
-        songsTable.getColumns().addAll(titleCol, artistCol, viewsCol);
-
-        HBox songActions = new HBox(10);
-        Button addSongBtn = new Button("Add New Song");
-        addSongBtn.setOnAction(e -> showAddSongDialog());
-
-        Button editSongBtn = new Button("Edit Selected");
-        editSongBtn.setOnAction(e -> {
-            Song selected = songsTable.getSelectionModel().getSelectedItem();
-            if (selected != null) showEditSongDialog(selected);
-        });
-
-        Button deleteSongBtn = new Button("Delete Selected");
-        deleteSongBtn.setOnAction(e -> {
-            Song selected = songsTable.getSelectionModel().getSelectedItem();
-            if (selected != null) deleteSong(selected);
-        });
-
-        songActions.getChildren().addAll(addSongBtn, editSongBtn, deleteSongBtn);
-        tabContent.getChildren().addAll(songsTable, songActions);
-
-        return tabContent;
+        songsTable.getColumns().setAll(titleCol, artistCol, viewsCol, albumCol);
     }
 
-    private static VBox createAnalyticsTab() {
-        VBox tabContent = new VBox(15);
-        tabContent.setPadding(new Insets(15));
+    private static Tab createAlbumsTab() {
+        Tab tab = new Tab("My Albums");
+        tab.setClosable(false);
+
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(15));
+
+        // Albums Table
+        albumsTable = new TableView<>();
+        setupAlbumsTable();
+
+        // Album Actions
+        HBox actions = new HBox(10);
+        Button addBtn = new Button("Add Album");
+        addBtn.setOnAction(e -> showAddAlbumDialog());
+
+
+        Button deleteBtn = new Button("Delete Selected");
+        deleteBtn.setOnAction(e -> {
+            Album selected = albumsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) deleteAlbum(selected);
+        });
+
+        actions.getChildren().addAll(addBtn, deleteBtn);
+        content.getChildren().addAll(albumsTable, actions);
+        tab.setContent(content);
+
+        return tab;
+    }
+
+    private static void setupAlbumsTable() {
+        albumsTable.setItems(albums);
+        albumsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        TableColumn<Album, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+
+        TableColumn<Album, String> artistCol = new TableColumn<>("Artist");
+        artistCol.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getArtistUsername()));
+
+        TableColumn<Album, Integer> tracksCol = new TableColumn<>("Tracks");
+        tracksCol.setCellValueFactory(cell ->
+                new SimpleIntegerProperty(cell.getValue().getSongIds().size()).asObject());
+
+        TableColumn<Album, String> dateCol = new TableColumn<>("Release Date");
+        dateCol.setCellValueFactory(cell ->
+                new SimpleStringProperty(cell.getValue().getReleaseDate().toString()));
+
+        albumsTable.getColumns().setAll(titleCol, artistCol, tracksCol, dateCol);
+    }
+
+    private static Tab createAnalyticsTab() {
+        Tab tab = new Tab("Analytics");
+        tab.setClosable(false);
+
+        VBox content = new VBox(20);
+        content.setPadding(new Insets(20));
 
         Label statsLabel = new Label("Your Statistics");
-        statsLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        statsLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
+        // Calculate statistics
         int totalSongs = songs.size();
-        int totalViews = songs.stream()
-                .filter(Objects::nonNull)
-                .mapToInt(Song::getViews)
-                .sum();
+        int totalAlbums = albums.size();
+        int totalViews = songs.stream().mapToInt(Song::getViews).sum();
+        int avgViews = totalSongs > 0 ? totalViews / totalSongs : 0;
 
-        Label statsText = new Label(String.format("Total Songs: %d\nTotal Views: %d",
-                totalSongs, totalViews));
+        GridPane statsGrid = new GridPane();
+        statsGrid.setHgap(20);
+        statsGrid.setVgap(10);
+        statsGrid.addRow(0, new Label("Total Songs:"), new Label(String.valueOf(totalSongs)));
+        statsGrid.addRow(1, new Label("Total Albums:"), new Label(String.valueOf(totalAlbums)));
+        statsGrid.addRow(2, new Label("Total Views:"), new Label(String.valueOf(totalViews)));
+        statsGrid.addRow(3, new Label("Average Views:"), new Label(String.valueOf(avgViews)));
 
-        tabContent.getChildren().addAll(statsLabel, statsText);
-        return tabContent;
+        content.getChildren().addAll(statsLabel, statsGrid);
+        tab.setContent(content);
+
+        return tab;
     }
 
     private static void showAddSongDialog() {
@@ -150,17 +240,36 @@ public class ArtistDashboard {
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
+        grid.setPadding(new Insets(20));
 
         TextField titleField = new TextField();
+        titleField.setPromptText("Song Title");
+
         TextArea lyricsArea = new TextArea();
-        TextField genreField = new TextField();
+        lyricsArea.setPromptText("Lyrics");
+        lyricsArea.setPrefRowCount(5);
+
+        ComboBox<Album> albumCombo = new ComboBox<>();
+        albumCombo.setItems(albums);
+        albumCombo.setPromptText("Select Album");
+        albumCombo.setConverter(new StringConverter<Album>() {
+            @Override
+            public String toString(Album album) {
+                return album != null ? album.getTitle() : "";
+            }
+
+            @Override
+            public Album fromString(String string) {
+                return null;
+            }
+        });
 
         grid.add(new Label("Title:"), 0, 0);
         grid.add(titleField, 1, 0);
         grid.add(new Label("Lyrics:"), 0, 1);
         grid.add(lyricsArea, 1, 1);
-        grid.add(new Label("Genre:"), 0, 2);
-        grid.add(genreField, 1, 2);
+        grid.add(new Label("Album:"), 0, 2);
+        grid.add(albumCombo, 1, 2);
 
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -169,25 +278,25 @@ public class ArtistDashboard {
             if (buttonType == ButtonType.OK) {
                 String title = titleField.getText().trim();
                 String lyrics = lyricsArea.getText().trim();
-                String genre = genreField.getText().trim();
+                Album album = albumCombo.getValue();
 
                 if (title.isEmpty() || lyrics.isEmpty()) {
-                    new Alert(Alert.AlertType.ERROR, "Title and lyrics are required").show();
+                    showAlert("Error", "Title and lyrics are required");
                     return null;
                 }
 
-                Song newSong = new Song(
-                        UUID.randomUUID().toString(),
-                        title,
-                        lyrics,
-                        Main.currentUser.getUsername());
-                newSong.setGenre(genre.isEmpty() ? "Unknown" : genre);
+                Song song = new Song(UUID.randomUUID().toString(), title, lyrics, Main.currentUser.getUsername());
+                if (album != null) {
+                    song.setAlbumId(album.getId());
+                    album.addSong(song.getId());
+                    AlbumStorage.saveAlbum(album);
+                }
 
                 try {
-                    DataStorage.saveSong(newSong);
-                    return newSong;
+                    DataStorage.saveSong(song);
+                    return song;
                 } catch (IOException e) {
-                    new Alert(Alert.AlertType.ERROR, "Failed to save song").show();
+                    showAlert("Error", "Failed to save song: " + e.getMessage());
                     return null;
                 }
             }
@@ -207,17 +316,38 @@ public class ArtistDashboard {
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
+        grid.setPadding(new Insets(20));
 
         TextField titleField = new TextField(song.getTitle());
         TextArea lyricsArea = new TextArea(song.getLyrics());
-        TextField genreField = new TextField(song.getGenre());
+        lyricsArea.setPrefRowCount(5);
+
+        ComboBox<Album> albumCombo = new ComboBox<>();
+        albumCombo.setItems(albums);
+        albumCombo.setConverter(new StringConverter<Album>() {
+            @Override
+            public String toString(Album album) {
+                return album != null ? album.getTitle() : "";
+            }
+
+            @Override
+            public Album fromString(String string) {
+                return null;
+            }
+        });
+
+
+        Album currentAlbum = AlbumStorage.getAlbumById(song.getAlbumId());
+        if (currentAlbum != null) {
+            albumCombo.getSelectionModel().select(currentAlbum);
+        }
 
         grid.add(new Label("Title:"), 0, 0);
         grid.add(titleField, 1, 0);
         grid.add(new Label("Lyrics:"), 0, 1);
         grid.add(lyricsArea, 1, 1);
-        grid.add(new Label("Genre:"), 0, 2);
-        grid.add(genreField, 1, 2);
+        grid.add(new Label("Album:"), 0, 2);
+        grid.add(albumCombo, 1, 2);
 
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -226,29 +356,121 @@ public class ArtistDashboard {
             if (buttonType == ButtonType.OK) {
                 song.setTitle(titleField.getText().trim());
                 song.setLyrics(lyricsArea.getText().trim());
-                song.setGenre(genreField.getText().trim());
+
+                Album selectedAlbum = albumCombo.getValue();
+                song.setAlbumId(selectedAlbum != null ? selectedAlbum.getId() : Song.SINGLE_ALBUM_ID);
 
                 try {
                     DataStorage.saveSong(song);
                     return song;
                 } catch (IOException e) {
-                    new Alert(Alert.AlertType.ERROR, "Failed to update song").show();
+                    showAlert("Error", "Failed to save song: " + e.getMessage());
                     return null;
                 }
             }
             return null;
         });
 
-        dialog.showAndWait();
+        dialog.showAndWait().ifPresent(updatedSong -> {
+            songsTable.refresh();
+            HomeScreen.show();
+        });
     }
 
     private static void deleteSong(Song song) {
         try {
             DataStorage.deleteSong(song.getId());
             songs.remove(song);
+
+            // Remove from album if exists
+            if (!song.getAlbumId().equals(Song.SINGLE_ALBUM_ID)) {
+                Album album = AlbumStorage.getAlbumById(song.getAlbumId());
+                if (album != null) {
+                    album.removeSong(song.getId());
+                    AlbumStorage.saveAlbum(album);
+                }
+            }
+
             HomeScreen.show();
         } catch (IOException e) {
-            new Alert(Alert.AlertType.ERROR, "Failed to delete song").show();
+            showAlert("Error", "Failed to delete song: " + e.getMessage());
         }
+    }
+
+    private static void showAddAlbumDialog() {
+        Dialog<Album> dialog = new Dialog<>();
+        dialog.setTitle("Add New Album");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+
+        TextField titleField = new TextField();
+        titleField.setPromptText("Album Title");
+
+        DatePicker datePicker = new DatePicker(LocalDate.now());
+
+        grid.add(new Label("Title:"), 0, 0);
+        grid.add(titleField, 1, 0);
+        grid.add(new Label("Release Date:"), 0, 1);
+        grid.add(datePicker, 1, 1);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == ButtonType.OK) {
+                String title = titleField.getText().trim();
+                LocalDate releaseDate = datePicker.getValue();
+
+                if (title.isEmpty()) {
+                    showAlert("Error", "Title is required");
+                    return null;
+                }
+
+                Album album = new Album(
+                        UUID.randomUUID().toString(),
+                        title,
+                        Main.currentUser.getUsername(),
+                        releaseDate
+                );
+
+                AlbumStorage.saveAlbum(album);
+                return album;
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(album -> {
+            albums.add(album);
+            showAlert("Success", "Album created successfully!");
+        });
+    }
+
+    private static void deleteAlbum(Album album) {
+        try {
+            for (String songId : album.getSongIds()) {
+                Song song = SongStorage.getSong(songId);
+                if (song != null) {
+                    song.setAlbumId(Song.SINGLE_ALBUM_ID);
+                    DataStorage.saveSong(song);
+                }
+            }
+
+            AlbumStorage.deleteAlbum(album.getId());
+            albums.remove(album);
+            showAlert("Success", "Album deleted successfully!");
+        } catch (Exception e) {
+            showAlert("Error", "Failed to delete album: " + e.getMessage());
+        }
+    }
+
+    private static void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 }

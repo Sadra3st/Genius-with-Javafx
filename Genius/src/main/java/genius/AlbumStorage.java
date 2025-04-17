@@ -36,7 +36,7 @@ public class AlbumStorage {
         saveAlbums();
     }
 
-    public static Album getAlbum(String id) {
+    public static Album getAlbumById(String id) {
         return albums.get(id);
     }
 
@@ -48,5 +48,10 @@ public class AlbumStorage {
 
     public static List<Album> getAllAlbums() {
         return new ArrayList<>(albums.values());
+    }
+
+    public static void deleteAlbum(String id) {
+        albums.remove(id);
+        saveAlbums();
     }
 }
