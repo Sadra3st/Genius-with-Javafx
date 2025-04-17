@@ -91,18 +91,23 @@ Key highlights:
 ## 📸 Screenshots
   
 ![Welcome Screen](screenshotes/welcome.png) 
+
 *First thing you will see after opening the app*
 
 ![Home](screenshotes/Home.png)
+
 *You can see songs and albums and search*
 
 ![viewSong](screenshotes/view.png)
+
 *You can read the lyrics and add comment*
 
 ![Profile](screenshotes/profile.png)
+
 *You can see your statics and activities in your profile*
 
 ![Add](screenshotes/Addsong.png)
+
 *Artists can add songs to their albums*
 
 
