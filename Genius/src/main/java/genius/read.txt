@@ -1,0 +1,2994 @@
+package genius;
+
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.*;
+
+
+import java.util.Map;
+
+public class AdminDashboard {
+    private static ObservableList<User> userListRef;
+    private static TableView<User> userTableRef;
+
+    public static void show() {
+        ArtistVerification.loadRequests();
+        BorderPane layout = new BorderPane();
+        layout.setPadding(new Insets(20));
+
+        HBox topBar = new HBox(10);
+        topBar.setPadding(new Insets(0, 0, 20, 0));
+
+        Label welcomeLabel = new Label("Welcome, Admin " + Main.currentUser.getUsername() + "!");
+        welcomeLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+
+        Button changePasswordBtn = new Button("Change Password");
+        changePasswordBtn.setOnAction(e -> ChangePasswordScreen.show());
+
+        Button logoutBtn = new Button("Logout");
+        logoutBtn.setOnAction(e -> {
+            Main.currentUser = null;
+            LoginScreen.show();
+        });
+
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        topBar.getChildren().addAll(welcomeLabel, spacer, changePasswordBtn, logoutBtn);
+        layout.setTop(topBar);
+
+        TabPane tabPane = new TabPane();
+
+
+        Tab userManagementTab = new Tab("User Management");
+        userManagementTab.setContent(createUserManagementTab());
+        userManagementTab.setClosable(false);
+
+
+        Tab artistVerificationTab = new Tab("Artist Verification");
+        artistVerificationTab.setContent(createArtistVerificationTab());
+        artistVerificationTab.setClosable(false);
+
+        tabPane.getTabs().addAll(userManagementTab, artistVerificationTab);
+        layout.setCenter(tabPane);
+
+        Scene scene = new Scene(layout, 900, 600);
+        Main.primaryStage.setScene(scene);
+        Main.primaryStage.setTitle("Admin Dashboard");
+        Main.primaryStage.show();
+    }
+
+
+    private static VBox createUserManagementTab() {
+        VBox content = new VBox(10);
+        content.setPadding(new Insets(15));
+
+
+        TableView<User> userTable = new TableView<>();
+        ObservableList<User> users = FXCollections.observableArrayList(UserStorage.getAllUsers().values());
+        userTable.setItems(users);
+        userListRef = users;
+        userTableRef = userTable;
+
+
+        TableColumn<User, String> usernameCol = new TableColumn<>("Username");
+        usernameCol.setCellValueFactory(new PropertyValueFactory<>("username"));
+
+        TableColumn<User, String> emailCol = new TableColumn<>("Email");
+        emailCol.setCellValueFactory(new PropertyValueFactory<>("email"));
+
+        TableColumn<User, Boolean> adminCol = new TableColumn<>("Admin");
+        adminCol.setCellValueFactory(cellData ->
+                new SimpleBooleanProperty(cellData.getValue().isAdmin()));
+
+        TableColumn<User, Boolean> artistCol = new TableColumn<>("Artist");
+        artistCol.setCellValueFactory(cellData ->
+                new SimpleBooleanProperty(cellData.getValue().isArtist()));
+
+        TableColumn<User, Boolean> verifiedCol = new TableColumn<>("Verified");
+        verifiedCol.setCellValueFactory(cellData ->
+                new SimpleBooleanProperty(cellData.getValue().isVerified()));
+
+        userTable.getColumns().addAll(usernameCol, emailCol, adminCol, artistCol, verifiedCol);
+        userTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+
+
+        HBox controls = new HBox(10);
+        Button promoteBtn = new Button("Promote/Demote");
+        promoteBtn.setOnAction(e -> {
+            User selected = userTable.getSelectionModel().getSelectedItem();
+            if (selected != null && !selected.getUsername().equals("admin")) {
+                selected.setAdmin(!selected.isAdmin());
+                UserStorage.updateUser(selected);
+                userTable.refresh();
+            }
+        });
+
+        Button banBtn = new Button("Ban User");
+        banBtn.setOnAction(e -> {
+            User selected = userTable.getSelectionModel().getSelectedItem();
+            if (selected != null && !selected.getUsername().equals("admin")) {
+                UserStorage.deleteUser(selected.getUsername());
+                users.remove(selected);
+            }
+        });
+
+        controls.getChildren().addAll(promoteBtn, banBtn);
+        content.getChildren().addAll(userTable, controls);
+
+        return content;
+    }
+
+    private static VBox createArtistVerificationTab() {
+        VBox content = new VBox(10);
+        content.setPadding(new Insets(15));
+
+        TableView<Map.Entry<String, String>> table = new TableView<>();
+        ObservableList<Map.Entry<String, String>> requests =
+                FXCollections.observableArrayList(ArtistVerification.getPendingRequests().entrySet());
+        table.setItems(requests);
+
+        TableColumn<Map.Entry<String, String>, String> userCol = new TableColumn<>("Username");
+        userCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getKey()));
+
+        TableColumn<Map.Entry<String, String>, String> bioCol = new TableColumn<>("Artist Bio");
+        bioCol.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().getValue()));
+
+        table.getColumns().addAll(userCol, bioCol);
+
+        HBox buttons = new HBox(10);
+        Button approveBtn = new Button("Approve");
+        approveBtn.setOnAction(e -> {
+            Map.Entry<String, String> selected = table.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                String username = selected.getKey();
+                ArtistVerification.approveRequest(username);
+                requests.remove(selected);
+                userListRef.setAll(UserStorage.getAllUsers().values());
+                userTableRef.refresh();
+
+                new Alert(Alert.AlertType.INFORMATION,
+                        "Artist approved and reflected in user list.").show();
+            }
+        });
+        ;
+
+        Button rejectBtn = new Button("Reject");
+        rejectBtn.setOnAction(e -> {
+            Map.Entry<String, String> selected = table.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                ArtistVerification.rejectRequest(selected.getKey());
+                requests.remove(selected);
+            }
+        });
+
+        buttons.getChildren().addAll(approveBtn, rejectBtn);
+        content.getChildren().addAll(table, buttons);
+
+        return content;
+    }
+}package genius;
+
+import java.io.Serializable;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+public class Album implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private String id;
+    private String title;
+    private String artistUsername; // owner
+    private LocalDate releaseDate;
+    private List<String> songIds = new ArrayList<>(); // ordered
+
+    public Album(String id, String title, String artistUsername, LocalDate releaseDate) {
+        this.id = id != null ? id : UUID.randomUUID().toString();
+        this.title = title;
+        this.artistUsername = artistUsername;
+        this.releaseDate = releaseDate != null ? releaseDate : LocalDate.now();
+    }
+
+    public static Album createSingleAlbum() {
+        return new Album(Song.SINGLE_ALBUM_ID, "Single", "none", LocalDate.now());
+    }
+
+    public String getId() { return id; }
+    public String getTitle() { return title; }
+    public String getArtistUsername() { return artistUsername; }
+    public LocalDate getReleaseDate() { return releaseDate; }
+    public List<String> getSongIds() { return new ArrayList<>(songIds); }
+
+    public void addSong(String songId) {
+        if (!songIds.contains(songId)) {
+            songIds.add(songId);
+        }
+    }
+
+    public void removeSong(String songId) {
+        songIds.remove(songId);
+    }
+}
+package genius;
+
+import java.io.*;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class AlbumStorage {
+    private static final String FILE_PATH = "data/albums.dat";
+    private static Map<String, Album> albums = new HashMap<>();
+
+    static {
+        loadAlbums();
+    }
+
+    private static void loadAlbums() {
+        File file = new File(FILE_PATH);
+        if (!file.exists()) return;
+
+        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
+            albums = (Map<String, Album>) in.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Failed to load albums: " + e.getMessage());
+        }
+    }
+
+    private static void saveAlbums() {
+        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(FILE_PATH))) {
+            out.writeObject(albums);
+        } catch (IOException e) {
+            System.err.println("Failed to save albums: " + e.getMessage());
+        }
+    }
+
+    public static void saveAlbum(Album album) {
+        albums.put(album.getId(), album);
+        saveAlbums();
+    }
+
+    public static Album getAlbumById(String id) {
+        return albums.get(id);
+    }
+
+    public static List<Album> getAlbumsByArtist(String artistUsername) {
+        return albums.values().stream()
+                .filter(a -> a.getArtistUsername().equalsIgnoreCase(artistUsername))
+                .collect(Collectors.toList());
+    }
+
+    public static List<Album> getAllAlbums() {
+        return new ArrayList<>(albums.values());
+    }
+
+    public static void deleteAlbum(String id) {
+        albums.remove(id);
+        saveAlbums();
+    }
+}
+package genius;
+
+import javafx.collections.FXCollections;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.scene.text.Text;
+
+import java.util.List;
+
+public class AlbumViewScreen {
+    public static void show(Album album) {
+        BorderPane layout = new BorderPane();
+        layout.setPadding(new Insets(20));
+
+        HBox header = new HBox(10);
+        Button backBtn = new Button("\u2190 Back");
+        backBtn.setOnAction(e -> HomeScreen.show());
+
+        Label titleLabel = new Label(album.getTitle());
+        titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        header.getChildren().addAll(backBtn, spacer, titleLabel);
+        layout.setTop(header);
+
+        VBox albumInfo = new VBox(10);
+        albumInfo.setPadding(new Insets(10));
+
+        Label artistLabel = new Label("Artist: " + album.getArtistUsername());
+        Label releaseDateLabel = new Label("Release Date: " + album.getReleaseDate());
+        Label tracksLabel = new Label("Tracks: " + album.getSongIds().size());
+
+        albumInfo.getChildren().addAll(artistLabel, releaseDateLabel, tracksLabel);
+
+        ListView<Song> songList = new ListView<>();
+        try {
+            List<Song> songs = SongController.getSongsByAlbum(album.getId());
+
+            songList.setItems(FXCollections.observableArrayList(songs));
+            songList.setCellFactory(lv -> new ListCell<Song>() {
+                @Override
+                protected void updateItem(Song song, boolean empty) {
+                    super.updateItem(song, empty);
+                    if (empty || song == null) {
+                        setText(null);
+                    } else {
+                        setText((getIndex() + 1) + ". " + song.getTitle());
+                    }
+                }
+            });
+
+            songList.setOnMouseClicked(e -> {
+                if (e.getClickCount() == 2) {
+                    Song selected = songList.getSelectionModel().getSelectedItem();
+                    if (selected != null) {
+                        SongViewScreen.show(selected);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            albumInfo.getChildren().add(new Text("Failed to load songs: " + e.getMessage()));
+        }
+
+        VBox contentBox = new VBox(20, albumInfo, new Label("Tracklist:"), songList);
+        contentBox.setPadding(new Insets(15));
+        layout.setCenter(contentBox);
+
+        Scene scene = new Scene(layout, 700, 500);
+        Main.primaryStage.setScene(scene);
+        Main.primaryStage.setTitle("Album - " + album.getTitle());
+    }
+}
+package genius;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Artist implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private String id;
+    private String username;
+    private String bio;
+    private int followerCount;
+    private List<String> songIds = new ArrayList<>();
+
+    public Artist(String id, String username) {
+        this.id = id;
+        this.username = username;
+        this.followerCount = 0;
+    }
+
+
+    public String getId() { return id; }
+    public String getUsername() { return username; }
+    public String getBio() { return bio; }
+    public int getFollowerCount() { return followerCount; }
+    public List<String> getSongIds() { return new ArrayList<>(songIds); }
+
+    public void setBio(String bio) { this.bio = bio; }
+    public void setUsername(String username) { this.username = username; }
+
+    public void addFollower() { followerCount++; }
+    public void removeFollower() { followerCount--; }
+    public void addSong(String songId) { songIds.add(songId); }
+    public void removeSong(String songId) { songIds.remove(songId); }
+}package genius;
+
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.*;
+import javafx.util.StringConverter;
+
+import java.io.IOException;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+
+public class ArtistDashboard {
+    private static ObservableList<Song> songs = FXCollections.observableArrayList();
+    private static ObservableList<Album> albums = FXCollections.observableArrayList();
+    private static TableView<Song> songsTable;
+    private static TableView<Album> albumsTable;
+
+    public static void show() {
+        BorderPane mainLayout = new BorderPane();
+        mainLayout.setPadding(new Insets(20));
+
+        // Top Bar
+        HBox topBar = createTopBar();
+        mainLayout.setTop(topBar);
+
+        // Main Content
+        TabPane tabPane = new TabPane();
+        tabPane.getTabs().addAll(
+                createSongsTab(),
+                createAlbumsTab(),
+                createAnalyticsTab()
+        );
+        mainLayout.setCenter(tabPane);
+
+        loadArtistData();
+
+        Scene scene = new Scene(mainLayout, 900, 650);
+        Main.primaryStage.setScene(scene);
+        Main.primaryStage.setTitle("Artist Dashboard - " + Main.currentUser.getUsername());
+    }
+
+    private static HBox createTopBar() {
+        HBox topBar = new HBox(10);
+        topBar.setPadding(new Insets(0, 0, 20, 0));
+
+        Button homeBtn = new Button("Home");
+        homeBtn.setOnAction(e -> HomeScreen.show());
+
+        Button refreshBtn = new Button("Refresh");
+        refreshBtn.setOnAction(e -> loadArtistData());
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Button changePasswordBtn = new Button("Change Password");
+        changePasswordBtn.setOnAction(e -> ChangePasswordScreen.show());
+
+        Button logoutBtn = new Button("Logout");
+        logoutBtn.setOnAction(e -> {
+            Main.currentUser = null;
+            LoginScreen.show();
+        });
+
+        topBar.getChildren().addAll(homeBtn, refreshBtn, spacer, changePasswordBtn, logoutBtn);
+        return topBar;
+    }
+
+    private static void loadArtistData() {
+        songs.clear();
+        albums.clear();
+
+        try {
+            // Load songs
+            List<Song> loadedSongs = DataStorage.loadArtistSongs(Main.currentUser.getUsername());
+            songs.addAll(loadedSongs);
+
+            // Load albums
+            List<Album> loadedAlbums = AlbumStorage.getAlbumsByArtist(Main.currentUser.getUsername());
+            albums.addAll(loadedAlbums);
+
+            // Refresh tables
+            if (songsTable != null) songsTable.refresh();
+            if (albumsTable != null) albumsTable.refresh();
+        } catch (Exception e) {
+            showAlert("Error", "Could not load artist data: " + e.getMessage());
+        }
+    }
+
+    private static Tab createSongsTab() {
+        Tab tab = new Tab("My Songs");
+        tab.setClosable(false);
+
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(15));
+
+        // Songs Table
+        songsTable = new TableView<>();
+        setupSongsTable();
+
+        // Song Actions
+        HBox actions = new HBox(10);
+        Button addBtn = new Button("Add Song");
+        addBtn.setOnAction(e -> showAddSongDialog());
+
+        Button editBtn = new Button("Edit Selected");
+        editBtn.setOnAction(e -> {
+            Song selected = songsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) showEditSongDialog(selected);
+        });
+
+        Button deleteBtn = new Button("Delete Selected");
+        deleteBtn.setOnAction(e -> {
+            Song selected = songsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) deleteSong(selected);
+        });
+
+        actions.getChildren().addAll(addBtn, editBtn, deleteBtn);
+        content.getChildren().addAll(songsTable, actions);
+        tab.setContent(content);
+
+        return tab;
+    }
+
+    private static void setupSongsTable() {
+        songsTable.setItems(songs);
+        songsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        TableColumn<Song, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+
+        TableColumn<Song, String> artistCol = new TableColumn<>("Artist");
+        artistCol.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getArtistId()));
+
+        TableColumn<Song, Integer> viewsCol = new TableColumn<>("Views");
+        viewsCol.setCellValueFactory(cell -> new SimpleIntegerProperty(cell.getValue().getViews()).asObject());
+
+        TableColumn<Song, String> albumCol = new TableColumn<>("Album");
+        albumCol.setCellValueFactory(cell -> {
+            String albumId = cell.getValue().getAlbumId();
+            Album album = AlbumStorage.getAlbumById(albumId);
+            return new SimpleStringProperty(album != null ? album.getTitle() : "Single");
+        });
+
+        songsTable.getColumns().setAll(titleCol, artistCol, viewsCol, albumCol);
+    }
+
+    private static Tab createAlbumsTab() {
+        Tab tab = new Tab("My Albums");
+        tab.setClosable(false);
+
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(15));
+
+        // Albums Table
+        albumsTable = new TableView<>();
+        setupAlbumsTable();
+
+        // Album Actions
+        HBox actions = new HBox(10);
+        Button addBtn = new Button("Add Album");
+        addBtn.setOnAction(e -> showAddAlbumDialog());
+
+
+        Button deleteBtn = new Button("Delete Selected");
+        deleteBtn.setOnAction(e -> {
+            Album selected = albumsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) deleteAlbum(selected);
+        });
+
+        actions.getChildren().addAll(addBtn, deleteBtn);
+        content.getChildren().addAll(albumsTable, actions);
+        tab.setContent(content);
+
+        return tab;
+    }
+
+    private static void setupAlbumsTable() {
+        albumsTable.setItems(albums);
+        albumsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        TableColumn<Album, String> titleCol = new TableColumn<>("Title");
+        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
+
+        TableColumn<Album, String> artistCol = new TableColumn<>("Artist");
+        artistCol.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getArtistUsername()));
+
+        TableColumn<Album, Integer> tracksCol = new TableColumn<>("Tracks");
+        tracksCol.setCellValueFactory(cell ->
+                new SimpleIntegerProperty(cell.getValue().getSongIds().size()).asObject());
+
+        TableColumn<Album, String> dateCol = new TableColumn<>("Release Date");
+        dateCol.setCellValueFactory(cell ->
+                new SimpleStringProperty(cell.getValue().getReleaseDate().toString()));
+
+        albumsTable.getColumns().setAll(titleCol, artistCol, tracksCol, dateCol);
+    }
+
+    private static Tab createAnalyticsTab() {
+        Tab tab = new Tab("Analytics");
+        tab.setClosable(false);
+
+        VBox content = new VBox(20);
+        content.setPadding(new Insets(20));
+
+        Label statsLabel = new Label("Your Statistics");
+        statsLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        // Calculate statistics
+        int totalSongs = songs.size();
+        int totalAlbums = albums.size();
+        int totalViews = songs.stream().mapToInt(Song::getViews).sum();
+        int avgViews = totalSongs > 0 ? totalViews / totalSongs : 0;
+
+        GridPane statsGrid = new GridPane();
+        statsGrid.setHgap(20);
+        statsGrid.setVgap(10);
+        statsGrid.addRow(0, new Label("Total Songs:"), new Label(String.valueOf(totalSongs)));
+        statsGrid.addRow(1, new Label("Total Albums:"), new Label(String.valueOf(totalAlbums)));
+        statsGrid.addRow(2, new Label("Total Views:"), new Label(String.valueOf(totalViews)));
+        statsGrid.addRow(3, new Label("Average Views:"), new Label(String.valueOf(avgViews)));
+
+        content.getChildren().addAll(statsLabel, statsGrid);
+        tab.setContent(content);
+
+        return tab;
+    }
+
+    private static void showAddSongDialog() {
+        Dialog<Song> dialog = new Dialog<>();
+        dialog.setTitle("Add New Song");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+
+        TextField titleField = new TextField();
+        titleField.setPromptText("Song Title");
+
+        TextArea lyricsArea = new TextArea();
+        lyricsArea.setPromptText("Lyrics");
+        lyricsArea.setPrefRowCount(5);
+
+        ComboBox<Album> albumCombo = new ComboBox<>();
+        albumCombo.setItems(albums);
+        albumCombo.setPromptText("Select Album");
+        albumCombo.setConverter(new StringConverter<Album>() {
+            @Override
+            public String toString(Album album) {
+                return album != null ? album.getTitle() : "";
+            }
+
+            @Override
+            public Album fromString(String string) {
+                return null;
+            }
+        });
+
+        grid.add(new Label("Title:"), 0, 0);
+        grid.add(titleField, 1, 0);
+        grid.add(new Label("Lyrics:"), 0, 1);
+        grid.add(lyricsArea, 1, 1);
+        grid.add(new Label("Album:"), 0, 2);
+        grid.add(albumCombo, 1, 2);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == ButtonType.OK) {
+                String title = titleField.getText().trim();
+                String lyrics = lyricsArea.getText().trim();
+                Album album = albumCombo.getValue();
+
+                if (title.isEmpty() || lyrics.isEmpty()) {
+                    showAlert("Error", "Title and lyrics are required");
+                    return null;
+                }
+
+                Song song = new Song(UUID.randomUUID().toString(), title, lyrics, Main.currentUser.getUsername());
+                if (album != null) {
+                    song.setAlbumId(album.getId());
+                    album.addSong(song.getId());
+                    AlbumStorage.saveAlbum(album);
+                }
+
+                try {
+                    DataStorage.saveSong(song);
+                    return song;
+                } catch (IOException e) {
+                    showAlert("Error", "Failed to save song: " + e.getMessage());
+                    return null;
+                }
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(song -> {
+            songs.add(song);
+            HomeScreen.show();
+        });
+    }
+
+    private static void showEditSongDialog(Song song) {
+        Dialog<Song> dialog = new Dialog<>();
+        dialog.setTitle("Edit Song");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+
+        TextField titleField = new TextField(song.getTitle());
+        TextArea lyricsArea = new TextArea(song.getLyrics());
+        lyricsArea.setPrefRowCount(5);
+
+        ComboBox<Album> albumCombo = new ComboBox<>();
+        albumCombo.setItems(albums);
+        albumCombo.setConverter(new StringConverter<Album>() {
+            @Override
+            public String toString(Album album) {
+                return album != null ? album.getTitle() : "";
+            }
+
+            @Override
+            public Album fromString(String string) {
+                return null;
+            }
+        });
+
+
+        Album currentAlbum = AlbumStorage.getAlbumById(song.getAlbumId());
+        if (currentAlbum != null) {
+            albumCombo.getSelectionModel().select(currentAlbum);
+        }
+
+        grid.add(new Label("Title:"), 0, 0);
+        grid.add(titleField, 1, 0);
+        grid.add(new Label("Lyrics:"), 0, 1);
+        grid.add(lyricsArea, 1, 1);
+        grid.add(new Label("Album:"), 0, 2);
+        grid.add(albumCombo, 1, 2);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == ButtonType.OK) {
+                song.setTitle(titleField.getText().trim());
+                song.setLyrics(lyricsArea.getText().trim());
+
+                Album selectedAlbum = albumCombo.getValue();
+                song.setAlbumId(selectedAlbum != null ? selectedAlbum.getId() : Song.SINGLE_ALBUM_ID);
+
+                try {
+                    DataStorage.saveSong(song);
+                    return song;
+                } catch (IOException e) {
+                    showAlert("Error", "Failed to save song: " + e.getMessage());
+                    return null;
+                }
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(updatedSong -> {
+            songsTable.refresh();
+            HomeScreen.show();
+        });
+    }
+
+    private static void deleteSong(Song song) {
+        try {
+            DataStorage.deleteSong(song.getId());
+            songs.remove(song);
+
+            // Remove from album if exists
+            if (!song.getAlbumId().equals(Song.SINGLE_ALBUM_ID)) {
+                Album album = AlbumStorage.getAlbumById(song.getAlbumId());
+                if (album != null) {
+                    album.removeSong(song.getId());
+                    AlbumStorage.saveAlbum(album);
+                }
+            }
+
+            HomeScreen.show();
+        } catch (IOException e) {
+            showAlert("Error", "Failed to delete song: " + e.getMessage());
+        }
+    }
+
+    private static void showAddAlbumDialog() {
+        Dialog<Album> dialog = new Dialog<>();
+        dialog.setTitle("Add New Album");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+
+        TextField titleField = new TextField();
+        titleField.setPromptText("Album Title");
+
+        DatePicker datePicker = new DatePicker(LocalDate.now());
+
+        grid.add(new Label("Title:"), 0, 0);
+        grid.add(titleField, 1, 0);
+        grid.add(new Label("Release Date:"), 0, 1);
+        grid.add(datePicker, 1, 1);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == ButtonType.OK) {
+                String title = titleField.getText().trim();
+                LocalDate releaseDate = datePicker.getValue();
+
+                if (title.isEmpty()) {
+                    showAlert("Error", "Title is required");
+                    return null;
+                }
+
+                Album album = new Album(
+                        UUID.randomUUID().toString(),
+                        title,
+                        Main.currentUser.getUsername(),
+                        releaseDate
+                );
+
+                AlbumStorage.saveAlbum(album);
+                return album;
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(album -> {
+            albums.add(album);
+            showAlert("Success", "Album created successfully!");
+        });
+    }
+
+    private static void deleteAlbum(Album album) {
+        try {
+            for (String songId : album.getSongIds()) {
+                Song song = SongStorage.getSong(songId);
+                if (song != null) {
+                    song.setAlbumId(Song.SINGLE_ALBUM_ID);
+                    DataStorage.saveSong(song);
+                }
+            }
+
+            AlbumStorage.deleteAlbum(album.getId());
+            albums.remove(album);
+            showAlert("Success", "Album deleted successfully!");
+        } catch (Exception e) {
+            showAlert("Error", "Failed to delete album: " + e.getMessage());
+        }
+    }
+
+    private static void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+}package genius;
+
+import javafx.collections.FXCollections;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import java.util.List;
+
+public class ArtistProfileScreen {
+    public static void show(Artist artist) {
+        BorderPane layout = new BorderPane();
+        layout.setPadding(new Insets(20));
+
+        HBox header = new HBox(10);
+        Button backBtn = new Button("← Back");
+        backBtn.setOnAction(e -> HomeScreen.show());
+
+        Label titleLabel = new Label("Artist: " + artist.getUsername());
+        titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        header.getChildren().addAll(backBtn, spacer, titleLabel);
+        layout.setTop(header);
+
+        VBox contentBox = new VBox(15);
+        contentBox.setPadding(new Insets(15));
+
+        Label bioLabel = new Label("Bio: " + artist.getBio());
+        Label followersLabel = new Label("Followers: " + artist.getFollowerCount());
+
+        ListView<Object> contentList = new ListView<>();
+        List<Object> content = FXCollections.observableArrayList();
+
+        content.addAll(AlbumStorage.getAlbumsByArtist(artist.getUsername()));
+        for (Song song : SongStorage.getAllSongs()) {
+            if (song.getArtistId().equals(artist.getUsername())) {
+                content.add(song);
+            }
+        }
+
+        contentList.setItems(FXCollections.observableArrayList(content));
+        contentList.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) {
+                Object selected = contentList.getSelectionModel().getSelectedItem();
+                if (selected instanceof Song) SongViewScreen.show((Song) selected);
+                if (selected instanceof Album) AlbumViewScreen.show((Album) selected);
+            }
+        });
+
+        contentBox.getChildren().addAll(bioLabel, followersLabel, new Label("Albums and Songs:"), contentList);
+        layout.setCenter(contentBox);
+
+        Scene scene = new Scene(layout, 800, 600);
+        Main.primaryStage.setScene(scene);
+    }
+}package genius;
+
+import java.io.*;
+import java.util.*;
+
+public class ArtistStorage {
+    private static final String ARTISTS_DIR = "data/artists/";
+    private static Map<String, Artist> artists = new HashMap<>();
+
+    static {
+        new File(ARTISTS_DIR).mkdirs();
+        loadArtists();
+    }
+
+    private static void loadArtists() {
+        File[] files = new File(ARTISTS_DIR).listFiles();
+        if (files != null) {
+            for (File file : files) {
+                try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                    Artist artist = (Artist) ois.readObject();
+                    artists.put(artist.getId(), artist);
+                } catch (IOException | ClassNotFoundException e) {
+                    System.err.println("Error loading artist: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    public static void saveArtist(Artist artist) {
+        try (ObjectOutputStream oos = new ObjectOutputStream(
+                new FileOutputStream(ARTISTS_DIR + artist.getId() + ".artist"))) {
+            oos.writeObject(artist);
+            artists.put(artist.getId(), artist);
+        } catch (IOException e) {
+            System.err.println("Error saving artist: " + e.getMessage());
+        }
+    }
+
+    public static Artist getArtist(String id) {
+        return artists.get(id);
+    }
+
+    public static Artist getArtistByUsername(String username) {
+        for (Artist artist : artists.values()) {
+            if (artist.getUsername().equals(username)) {
+                return artist;
+            }
+        }
+        return null;
+    }
+
+    public static List<Artist> getAllArtists() {
+        return new ArrayList<>(artists.values());
+    }
+}package genius;
+
+import java.io.*;
+import java.util.*;
+
+public class ArtistVerification {
+    private static final String REQUESTS_FILE = "data/artist_requests.txt";
+    private static Map<String, String> pendingRequests = new HashMap<>();
+
+    static {
+        loadRequests();
+    }
+
+    public static void loadRequests() {
+        try {
+            File file = new File(REQUESTS_FILE);
+            if (!file.exists()) {
+                file.getParentFile().mkdirs();
+                file.createNewFile();
+                return;
+            }
+
+            pendingRequests.clear();
+            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split("\\|", 2);
+                    if (parts.length == 2) {
+                        pendingRequests.put(parts[0], parts[1]);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error loading artist requests: " + e.getMessage());
+        }
+    }
+
+    public static void submitRequest(String username, String artistBio) {
+        pendingRequests.put(username, artistBio);
+        saveRequests();
+    }
+
+    public static void approveRequest(String username) {
+        User user = UserStorage.getUser(username);
+        if (user != null) {
+            user.setArtist(true);
+            user.setVerified(true);
+            UserStorage.updateUser(user);
+            if (ArtistStorage.getArtistByUsername(username) == null) {
+                Artist artist = new Artist(UUID.randomUUID().toString(), username);
+                artist.setBio(pendingRequests.get(username)); // include bio from request
+                ArtistStorage.saveArtist(artist);
+            }
+            pendingRequests.remove(username);
+            saveRequests();
+        }
+    }
+
+
+    public static void rejectRequest(String username) {
+        pendingRequests.remove(username);
+        saveRequests();
+    }
+
+    private static void saveRequests() {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(REQUESTS_FILE))) {
+            for (Map.Entry<String, String> entry : pendingRequests.entrySet()) {
+                writer.write(entry.getKey() + "|" + entry.getValue());
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            System.err.println("Error saving artist requests: " + e.getMessage());
+        }
+    }
+
+    public static Map<String, String> getPendingRequests() {
+        return new HashMap<>(pendingRequests);
+    }
+}package genius;
+
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+
+public class ChangePasswordScreen {
+    public static void show() {
+        VBox layout = new VBox(10);
+        layout.setPadding(new Insets(20));
+
+        Label title = new Label("Change Password");
+        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        PasswordField currentPassword = new PasswordField();
+        currentPassword.setPromptText("Current Password");
+
+        PasswordField newPassword = new PasswordField();
+        newPassword.setPromptText("New Password");
+
+        PasswordField confirmPassword = new PasswordField();
+        confirmPassword.setPromptText("Confirm New Password");
+
+        Label message = new Label();
+        message.setTextFill(Color.RED);
+
+        Button changeBtn = new Button("Change Password");
+        changeBtn.setOnAction(e -> {
+            String current = currentPassword.getText();
+            String newPass = newPassword.getText();
+            String confirm = confirmPassword.getText();
+
+            if (current.isEmpty() || newPass.isEmpty() || confirm.isEmpty()) {
+                message.setText("Please fill all fields.");
+                return;
+            }
+
+            if (!UserStorage.validateLogin(Main.currentUser.getUsername(), current)) {
+                message.setText("Current password is incorrect.");
+                return;
+            }
+
+            if (!newPass.equals(confirm)) {
+                message.setText("New passwords don't match.");
+                return;
+            }
+
+            if (newPass.length() < 8) {
+                message.setText("Password must be at least 8 characters.");
+                return;
+            }
+
+            if (RegisterScreen.calculatePasswordStrength(newPass) < 3) {
+                message.setText("Password is too weak. Please choose a stronger password.");
+                return;
+            }
+
+            Main.currentUser.setPassword(newPass);
+            UserStorage.updateUser(Main.currentUser);
+            message.setText("Password changed successfully!");
+        });
+
+        Button backBtn = new Button("Back");
+        backBtn.setOnAction(e -> {
+            if (Main.currentUser.isAdmin()) {
+                AdminDashboard.show();
+            } else {
+                UserDashboard.show();
+            }
+        });
+
+        layout.getChildren().addAll(title, currentPassword, newPassword,
+                confirmPassword, changeBtn, backBtn, message);
+        Scene scene = new Scene(layout, 350, 300);
+        Main.primaryStage.setScene(scene);
+        Main.primaryStage.setTitle("Change Password");
+        Main.primaryStage.show();
+    }
+}package genius;
+
+import java.io.Serializable;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+public class Comment implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private String id;
+    private String userId;
+    private String songId;
+    private String text;
+    private LocalDateTime timestamp;
+
+    public Comment(String id, String userId, String songId, String text) {
+        this.id = id != null ? id : UUID.randomUUID().toString();
+        this.userId = userId;
+        this.songId = songId;
+        this.text = text;
+        this.timestamp = LocalDateTime.now();
+    }
+
+    public String getId() { return id; }
+    public String getUserId() { return userId; }
+    public String getSongId() { return songId; }
+    public String getText() { return text; }
+    public LocalDateTime getTimestamp() { return timestamp; }
+}package genius;
+
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+
+public class DataStorage {
+    private static final String DATA_DIR = "data/";
+    private static final String SONGS_DIR = DATA_DIR + "songs/";
+    private static final String LYRICS_DIR = DATA_DIR + "lyrics/";
+    private static final String COMMENTS_DIR = DATA_DIR + "comments/";
+
+    static {
+        createDirectories();
+    }
+
+    private static void createDirectories() {
+        try {
+            Files.createDirectories(Paths.get(SONGS_DIR));
+            Files.createDirectories(Paths.get(LYRICS_DIR));
+            Files.createDirectories(Paths.get(COMMENTS_DIR));
+        } catch (IOException e) {
+            System.err.println("Failed to create data directories: " + e.getMessage());
+        }
+    }
+
+    public static void saveSong(Song song) throws IOException {
+        // Save song metadata
+        Path songFile = Paths.get(SONGS_DIR + song.getId() + ".song");
+        try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(songFile))) {
+            oos.writeObject(song);
+        }
+
+
+        Path lyricsFile = Paths.get(LYRICS_DIR + song.getId() + ".txt");
+        Files.write(lyricsFile, song.getLyrics().getBytes());
+    }
+
+    public static Song loadSong(String songId) throws IOException, ClassNotFoundException {
+        Path songFile = Paths.get(SONGS_DIR + songId + ".song");
+        if (!Files.exists(songFile)) {
+            return null;
+        }
+
+        try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(songFile))) {
+            Song song = (Song) ois.readObject();
+
+
+            Path lyricsFile = Paths.get(LYRICS_DIR + songId + ".txt");
+            if (Files.exists(lyricsFile)) {
+                song.setLyrics(new String(Files.readAllBytes(lyricsFile)));
+            }
+
+            return song;
+        }
+    }
+
+    public static List<Song> loadArtistSongs(String artistUsername) {
+        List<Song> songs = new ArrayList<>();
+        try {
+            Files.list(Paths.get(SONGS_DIR))
+                    .filter(path -> path.toString().endsWith(".song"))
+                    .forEach(path -> {
+                        try {
+                            Song song = loadSong(path.getFileName().toString().replace(".song", ""));
+                            if (song != null && song.getArtistId().equals(artistUsername)) {
+                                songs.add(song);
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error loading song: " + e.getMessage());
+                        }
+                    });
+        } catch (IOException e) {
+            System.err.println("Error listing songs: " + e.getMessage());
+        }
+        return songs;
+    }
+
+    public static List<Song> loadAllSongs() {
+        List<Song> songs = new ArrayList<>();
+        try {
+            Files.list(Paths.get(SONGS_DIR))
+                    .filter(path -> path.toString().endsWith(".song"))
+                    .forEach(path -> {
+                        try {
+                            Song song = loadSong(path.getFileName().toString().replace(".song", ""));
+                            if (song != null) {
+                                songs.add(song);
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error loading song: " + e.getMessage());
+                        }
+                    });
+        } catch (IOException e) {
+            System.err.println("Error listing songs: " + e.getMessage());
+        }
+        return songs;
+    }
+
+    public static void deleteSong(String songId) throws IOException {
+
+        Path songFile = Paths.get(SONGS_DIR + songId + ".song");
+        Files.deleteIfExists(songFile);
+
+
+        Path lyricsFile = Paths.get(LYRICS_DIR + songId + ".txt");
+        Files.deleteIfExists(lyricsFile);
+
+
+        Files.list(Paths.get(COMMENTS_DIR))
+                .filter(path -> path.getFileName().toString().startsWith(songId + "_"))
+                .forEach(path -> {
+                    try {
+                        Files.delete(path);
+                    } catch (IOException e) {
+                        System.err.println("Failed to delete comment file: " + path);
+                    }
+                });
+    }
+
+    public static void saveComment(Comment comment) throws IOException {
+        Path commentFile = Paths.get(COMMENTS_DIR + comment.getSongId() + "_" + comment.getId() + ".comment");
+        try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(commentFile))) {
+            oos.writeObject(comment);
+        }
+    }
+
+    public static List<Comment> loadSongComments(String songId) {
+        List<Comment> comments = new ArrayList<>();
+        try {
+            Files.list(Paths.get(COMMENTS_DIR))
+                    .filter(path -> path.getFileName().toString().startsWith(songId + "_"))
+                    .forEach(path -> {
+                        try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(path))) {
+                            comments.add((Comment) ois.readObject());
+                        } catch (Exception e) {
+                            System.err.println("Error loading comment: " + e.getMessage());
+                        }
+                    });
+        } catch (IOException e) {
+            System.err.println("Error listing comments: " + e.getMessage());
+        }
+        return comments;
+    }
+
+    public static List<Comment> loadUserComments(String userId) {
+        List<Comment> comments = new ArrayList<>();
+        try {
+            Files.list(Paths.get(COMMENTS_DIR))
+                    .filter(path -> path.toString().endsWith(".comment"))
+                    .forEach(path -> {
+                        try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(path))) {
+                            Comment comment = (Comment) ois.readObject();
+                            if (comment.getUserId().equals(userId)) {
+                                comments.add(comment);
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error loading comment: " + e.getMessage());
+                        }
+                    });
+        } catch (IOException e) {
+            System.err.println("Error listing comments: " + e.getMessage());
+        }
+        return comments;
+    }
+
+    public static void deleteComment(String commentId) throws IOException {
+        Files.list(Paths.get(COMMENTS_DIR))
+                .filter(path -> path.getFileName().toString().contains(commentId))
+                .findFirst()
+                .ifPresent(path -> {
+                    try {
+                        Files.delete(path);
+                    } catch (IOException e) {
+                        System.err.println("Failed to delete comment: " + e.getMessage());
+                    }
+                });
+    }
+
+    public static int countSongComments(String songId) {
+        try {
+            return (int) Files.list(Paths.get(COMMENTS_DIR))
+                    .filter(path -> path.getFileName().toString().startsWith(songId + "_"))
+                    .count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    public static int countUserComments(String userId) {
+        try {
+            return (int) Files.list(Paths.get(COMMENTS_DIR))
+                    .filter(path -> {
+                        try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(path))) {
+                            Comment comment = (Comment) ois.readObject();
+                            return comment.getUserId().equals(userId);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    })
+                    .count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+    public static void incrementSongViews(String songId) {
+        try {
+            Song song = loadSong(songId);
+            if (song != null) {
+                song.incrementViews();
+                saveSong(song);
+            }
+        } catch (Exception e) {
+            System.err.println("Error incrementing song views: " + e.getMessage());
+        }
+    }
+
+    public static int loadSongViews(String songId) {
+        try {
+            Song song = loadSong(songId);
+            return song != null ? song.getViews() : 0;
+        } catch (Exception e) {
+            System.err.println("Error loading song views: " + e.getMessage());
+            return 0;
+        }
+    }
+}package genius;
+
+import javafx.collections.FXCollections;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.*;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class HomeScreen {
+    private static TabPane tabPane;
+    private static ListView<Song> songListView;
+    private static ListView<Album> albumListView;
+
+    public static void show() {
+        BorderPane layout = new BorderPane();
+        layout.setPadding(new Insets(20));
+
+        // Initialize list views
+        songListView = new ListView<>();
+        albumListView = new ListView<>();
+
+        // Create tabs
+        Tab songsTab = new Tab("Songs", songListView);
+        songsTab.setClosable(false);
+
+        Tab albumsTab = new Tab("Albums", albumListView);
+        albumsTab.setClosable(false);
+
+
+        tabPane = new TabPane(songsTab, albumsTab);
+
+
+        configureSongListView();
+        configureAlbumListView();
+
+        HBox topBar = createTopBar();
+        layout.setTop(topBar);
+
+        layout.setCenter(tabPane);
+        refreshContent(); // Initial load
+
+        Scene scene = new Scene(layout, 900, 600);
+        Main.primaryStage.setScene(scene);
+    }
+
+    private static void configureSongListView() {
+        songListView.setCellFactory(lv -> new ListCell<Song>() {
+            @Override
+            protected void updateItem(Song song, boolean empty) {
+                super.updateItem(song, empty);
+                if (empty || song == null) {
+                    setText(null);
+                } else {
+                    setText(String.format("%s - %s (%d views)",
+                            song.getTitle(),
+                            song.getArtistId() != null ? song.getArtistId() : "Unknown",
+                            song.getViews()));
+                }
+            }
+        });
+        songListView.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) {
+                Song selected = songListView.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    SongViewScreen.show(selected);
+                }
+            }
+        });
+    }
+
+    private static void configureAlbumListView() {
+        albumListView.setCellFactory(lv -> new ListCell<Album>() {
+            @Override
+            protected void updateItem(Album album, boolean empty) {
+                super.updateItem(album, empty);
+                if (empty || album == null) {
+                    setText(null);
+                } else {
+                    setText(String.format("%s - %s (%d tracks)",
+                            album.getTitle(),
+                            album.getArtistUsername() != null ? album.getArtistUsername() : "Unknown",
+                            album.getSongIds().size()));
+                }
+            }
+        });
+        albumListView.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) {
+                Album selected = albumListView.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    AlbumViewScreen.show(selected);
+                }
+            }
+        });
+    }
+
+    private static HBox createTopBar() {
+        HBox topBar = new HBox(10);
+        topBar.setPadding(new Insets(0, 0, 20, 0));
+
+        // Logo
+        ImageView logoView = new ImageView(new Image("file:genius_logo.png")); // Ensure the path is correct
+        logoView.setFitHeight(40); // Set desired height
+        logoView.setPreserveRatio(true);
+
+        // Back button
+        Button backBtn = new Button("← Back");
+        backBtn.setOnAction(e -> returnToPreviousScreen());
+
+        // Refresh button
+        Button refreshBtn = new Button("Refresh");
+        refreshBtn.setOnAction(e -> refreshContent());
+
+        // Search field
+        TextField searchField = new TextField();
+        searchField.setPromptText("Search for artist, song, or album");
+
+        // Search button
+        Button searchBtn = new Button("Search");
+        searchBtn.setOnAction(e -> searchEntities(searchField.getText()));
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        // Add logo and other components to top bar
+        topBar.getChildren().addAll(logoView, backBtn, refreshBtn, spacer, searchField, searchBtn);
+        return topBar;
+    }
+
+
+    public static void refreshContent() {
+        try {
+            // Reload all songs and albums from storage
+            List<Song> allSongs = SongStorage.getAllSongs();
+            List<Album> allAlbums = AlbumStorage.getAllAlbums();
+
+            // Update list views
+            songListView.setItems(FXCollections.observableArrayList(allSongs));
+            albumListView.setItems(FXCollections.observableArrayList(allAlbums));
+
+            // Sort by popularity (views for songs, track count for albums)
+            songListView.getItems().sort(Comparator.comparingInt(Song::getViews).reversed());
+
+        } catch (Exception e) {
+            System.err.println("Error refreshing content: " + e.getMessage());
+            new Alert(Alert.AlertType.ERROR, "Failed to refresh content").show();
+        }
+    }
+
+    public static void searchEntities(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            refreshContent();
+            return;
+        }
+
+        String searchQuery = query.toLowerCase();
+        List<Song> songResults = new ArrayList<>();
+        List<Album> albumResults = new ArrayList<>();
+
+        // Search songs
+        for (Song song : SongStorage.getAllSongs()) {
+            try {
+                boolean matches = (song.getTitle() != null && song.getTitle().toLowerCase().contains(searchQuery)) ||
+                        (song.getArtistId() != null && song.getArtistId().toLowerCase().contains(searchQuery)) ||
+                        (song.getLyrics() != null && song.getLyrics().toLowerCase().contains(searchQuery));
+
+                if (matches) songResults.add(song);
+            } catch (Exception e) {
+                System.err.println("Error processing song: " + e.getMessage());
+            }
+        }
+
+        // Search albums
+        for (Album album : AlbumStorage.getAllAlbums()) {
+            try {
+                boolean matches = (album.getTitle() != null && album.getTitle().toLowerCase().contains(searchQuery)) ||
+                        (album.getArtistUsername() != null && album.getArtistUsername().toLowerCase().contains(searchQuery));
+
+                if (matches) albumResults.add(album);
+            } catch (Exception e) {
+                System.err.println("Error processing album: " + e.getMessage());
+            }
+        }
+
+        // Update UI
+        songListView.setItems(FXCollections.observableArrayList(songResults));
+        albumListView.setItems(FXCollections.observableArrayList(albumResults));
+
+        // Select tab with results
+        if (!songResults.isEmpty()) {
+            tabPane.getSelectionModel().select(0);
+        } else if (!albumResults.isEmpty()) {
+            tabPane.getSelectionModel().select(1);
+        } else {
+            new Alert(Alert.AlertType.INFORMATION, "No results found for: " + query).show();
+        }
+    }
+
+    private static void returnToPreviousScreen() {
+        if (Main.currentUser == null) {
+            MainMenuScreen.show();
+        } else if (Main.currentUser.isAdmin()) {
+            AdminDashboard.show();
+        } else if (Main.currentUser.isArtist()) {
+            ArtistDashboard.show();
+        } else {
+            UserDashboard.show();
+        }
+    }
+}package genius;
+
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+
+public class LoginScreen {
+    public static void show() {
+        VBox layout = new VBox(10);
+        layout.setPadding(new Insets(20));
+
+        Label title = new Label("Login");
+        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+
+        TextField username = new TextField();
+        username.setPromptText("Username");
+
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Password");
+
+        TextField visiblePassword = new TextField();
+        visiblePassword.setManaged(false);
+        visiblePassword.setVisible(false);
+        visiblePassword.managedProperty().bind(passwordField.visibleProperty().not());
+        visiblePassword.visibleProperty().bind(passwordField.visibleProperty().not());
+        visiblePassword.textProperty().bindBidirectional(passwordField.textProperty());
+
+        CheckBox showPassword = new CheckBox("Show Password");
+        showPassword.setOnAction(e -> {
+            boolean show = showPassword.isSelected();
+            passwordField.setVisible(!show);
+            passwordField.setManaged(!show);
+            visiblePassword.setVisible(show);
+            visiblePassword.setManaged(show);
+        });
+
+        Label message = new Label();
+        message.setTextFill(Color.RED);
+
+        Button loginBtn = new Button("Login");
+        loginBtn.setDefaultButton(true);
+        loginBtn.setOnAction(e -> handleLogin(username, passwordField, message));
+
+        Button backBtn = new Button("Back to Menu");
+        backBtn.setOnAction(e -> MainMenuScreen.show());
+
+        Button registerBtn = new Button("Go to Register");
+        registerBtn.setOnAction(e -> RegisterScreen.show());
+
+        layout.getChildren().addAll(title, username, passwordField, visiblePassword,
+                showPassword, loginBtn, registerBtn, backBtn, message);
+
+        Scene scene = new Scene(layout, 350, 400);
+        Main.primaryStage.setScene(scene);
+        Main.primaryStage.setTitle("Login");
+        Main.primaryStage.show();
+    }
+
+    private static void handleLogin(TextField usernameField, PasswordField passwordField, Label messageLabel) {
+        String username = usernameField.getText().trim();
+        String password = passwordField.getText().trim();
+
+        if (username.isEmpty() || password.isEmpty()) {
+            messageLabel.setText("Please fill all fields.");
+            return;
+        }
+
+        System.out.println("Attempting login for: " + username);
+
+        try {
+            if (UserStorage.validateLogin(username, password)) {
+                System.out.println("Login validated!");
+
+                Main.currentUser = UserStorage.getUser(username.toLowerCase());
+                if (Main.currentUser == null) {
+                    System.out.println("User returned is NULL");
+                    messageLabel.setText("User not found.");
+                    return;
+                }
+
+                System.out.println("User loaded: " + Main.currentUser.getUsername());
+                System.out.println("Admin: " + Main.currentUser.isAdmin());
+                System.out.println("Artist: " + Main.currentUser.isArtist());
+
+                if (Main.currentUser.isAdmin()) {
+                    AdminDashboard.show();
+                } else if (Main.currentUser.isArtist()) {
+                    ArtistDashboard.show();
+                } else {
+                    UserDashboard.show();
+                }
+            } else {
+                messageLabel.setText("Invalid username or password");
+            }
+        } catch (Exception e) {
+            e.printStackTrace(); // THIS is what will show your real error
+            messageLabel.setText("System error during login");
+        }
+    }
+    }package genius;
+
+import java.io.Serializable;
+
+public class LyricEdit implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private final String userId;
+    private final String newLyrics;
+
+    public LyricEdit(String userId, String newLyrics) {
+        this.userId = userId;
+        this.newLyrics = newLyrics;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public String getNewLyrics() {
+        return newLyrics;
+    }
+}
+
+package genius;
+
+import javafx.application.Application;
+import javafx.scene.control.Alert;
+import javafx.scene.image.Image;
+import javafx.stage.Stage;
+
+public class Main extends Application {
+    public static Stage primaryStage;
+    public static User currentUser;
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+
+    @Override
+    public void start(Stage primaryStage) {
+        primaryStage.getIcons().add(new Image("app.png"));
+        try {
+            ArtistVerification.loadRequests();
+
+            Main.primaryStage = primaryStage;
+            Main.primaryStage.setTitle("Genius App");
+
+            MainMenuScreen.show();
+
+            primaryStage.show();
+        } catch (Exception e) {
+            e.printStackTrace();
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Startup Error");
+            alert.setHeaderText("Application failed to start");
+            alert.setContentText(e.getMessage());
+            alert.showAndWait();
+        }
+    }
+}package genius;
+
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.layout.VBox;
+import javafx.geometry.Pos;
+import javafx.geometry.Insets;
+
+public class MainMenuScreen {
+    public static void show() {
+        VBox layout = new VBox(20);
+        layout.setPadding(new Insets(40));
+        layout.setAlignment(Pos.CENTER);
+
+        Label titleLabel = new Label("Welcome to Genius");
+        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+
+        Button browseBtn = new Button("Browse Songs");
+        browseBtn.setPrefWidth(200);
+        browseBtn.setOnAction(e -> HomeScreen.show());
+
+        Button loginBtn = new Button("Login");
+        loginBtn.setPrefWidth(200);
+        loginBtn.setOnAction(e -> LoginScreen.show());
+
+        Button registerBtn = new Button("Register");
+        registerBtn.setPrefWidth(200);
+        registerBtn.setOnAction(e -> RegisterScreen.show());
+
+        layout.getChildren().addAll(titleLabel, browseBtn, loginBtn, registerBtn);
+
+        Scene scene = new Scene(layout, 400, 400);
+        Main.primaryStage.setScene(scene);
+        Main.primaryStage.setTitle("Genius - Main Menu");
+    }
+}package genius;
+
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Text;
+import java.util.regex.Pattern;
+
+public class RegisterScreen {
+    public static void show() {
+        VBox layout = new VBox(10);
+        layout.setPadding(new Insets(20));
+
+        Label title = new Label("Register User");
+        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+
+        TextField username = new TextField();
+        username.setPromptText("Username (min 4 characters)");
+
+        TextField email = new TextField();
+        email.setPromptText("Email");
+
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Password (min 8 characters)");
+
+        TextField visiblePassword = new TextField();
+        visiblePassword.setManaged(false);
+        visiblePassword.setVisible(false);
+        visiblePassword.managedProperty().bind(passwordField.visibleProperty().not());
+        visiblePassword.visibleProperty().bind(passwordField.visibleProperty().not());
+        visiblePassword.textProperty().bindBidirectional(passwordField.textProperty());
+
+        CheckBox showPassword = new CheckBox("Show Password");
+        showPassword.setOnAction(e -> {
+            boolean show = showPassword.isSelected();
+            passwordField.setVisible(!show);
+            passwordField.setManaged(!show);
+            visiblePassword.setVisible(show);
+            visiblePassword.setManaged(show);
+        });
+
+        CheckBox artistCheckbox = new CheckBox("Register as Artist");
+        artistCheckbox.setTooltip(new Tooltip("Artist accounts require admin approval"));
+
+        Text passwordStrength = new Text();
+        passwordStrength.setFill(Color.GRAY);
+
+        passwordField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int strength = calculatePasswordStrength(newVal);
+            updatePasswordStrengthText(passwordStrength, strength);
+        });
+
+        Label message = new Label();
+        message.setTextFill(Color.RED);
+
+        Button registerBtn = new Button("Register");
+        registerBtn.setOnAction(e -> {
+            String user = username.getText().trim();
+            String pass = passwordField.getText().trim();
+            String userEmail = email.getText().trim();
+            boolean isArtist = artistCheckbox.isSelected();
+
+            if (user.isEmpty() || pass.isEmpty() || userEmail.isEmpty()) {
+                message.setText("Please fill all fields.");
+                return;
+            }
+
+            if (user.length() < 4) {
+                message.setText("Username must be at least 4 characters.");
+                return;
+            }
+
+            if (pass.length() < 8) {
+                message.setText("Password must be at least 8 characters.");
+                return;
+            }
+
+            if (!isValidEmail(userEmail)) {
+                message.setText("Please enter a valid email address.");
+                return;
+            }
+
+            if (UserStorage.isEmailBanned(userEmail)) {
+                message.setText("This email is banned and cannot be used.");
+                return;
+            }
+
+            if (calculatePasswordStrength(pass) < 2) {
+                message.setText("Password is too weak. Please choose a stronger password.");
+                return;
+            }
+
+            if (UserStorage.userExists(user)) {
+                message.setText("Username already exists.");
+            } else if (UserStorage.emailExists(userEmail)) {
+                message.setText("Email already in use.");
+            }
+            UserStorage.registerUser(user, pass, userEmail, false, false, true); // always register as normal user
+
+            if (isArtist) {
+                ArtistVerification.submitRequest(user, "New artist application");
+                message.setText("Artist application submitted for admin approval!");
+            } else {
+                message.setText("Registration successful! You can now login.");
+            }
+
+        });
+
+        Button backBtn = new Button("Back to Login");
+        backBtn.setOnAction(e -> LoginScreen.show());
+
+        layout.getChildren().addAll(title, username, email, passwordField, visiblePassword,
+                showPassword, artistCheckbox, passwordStrength, registerBtn, backBtn, message);
+
+        Scene scene = new Scene(layout, 350, 500);
+        Main.primaryStage.setScene(scene);
+        Main.primaryStage.setTitle("Register");
+    }
+
+    private static boolean isValidEmail(String email) {
+        String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
+        return Pattern.compile(emailRegex).matcher(email).matches();
+    }
+
+    public static int calculatePasswordStrength(String password) {
+        int strength = 0;
+        if (password.length() >= 8) strength++;
+        if (password.matches(".*[A-Z].*")) strength++;
+        if (password.matches(".*[a-z].*")) strength++;
+        if (password.matches(".*[0-9].*")) strength++;
+        if (password.matches(".*[!@#$%^&*()':><?/].*")) strength++;
+        return strength;
+    }
+
+    private static void updatePasswordStrengthText(Text text, int strength) {
+        String[] descriptions = {"Very Weak", "Weak", "Moderate", "Strong", "Very Strong"};
+        Color[] colors = {Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.DARKGREEN};
+
+        int index = Math.min(strength, descriptions.length - 1);
+        text.setText("Password Strength: " + descriptions[index]);
+        text.setFill(colors[index]);
+    }
+}// ✅ Finalized Song.java - aligns with full song/album system
+package genius;
+
+import java.io.Serializable;
+import java.time.LocalDate;
+import java.util.*;
+
+public class Song implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private String id;
+    private String title;
+    private String lyrics;
+    private String artistId; // main artist
+    private List<String> featuredArtists = new ArrayList<>();
+    private String albumId; // "SINGLE" or an album UUID
+    private String genre;
+    private List<String> tags = new ArrayList<>();
+    private int views;
+    private LocalDate releaseDate;
+    private Map<String, Boolean> editPermissions = new HashMap<>();
+    private List<LyricEdit> pendingEdits = new ArrayList<>();
+    private List<Comment> comments = new ArrayList<>();
+
+    public static final String SINGLE_ALBUM_ID = "SINGLE";
+
+    public Song(String id, String title, String lyrics, String artistId) {
+        this.id = id != null ? id : UUID.randomUUID().toString();
+        this.title = title;
+        this.lyrics = lyrics;
+        this.artistId = artistId;
+        this.albumId = SINGLE_ALBUM_ID; // default to single
+        this.genre = "Unknown";
+        this.views = 0;
+        this.releaseDate = LocalDate.now();
+    }
+
+    // Getters
+    public String getId() { return id; }
+    public String getTitle() { return title; }
+    public String getLyrics() { return lyrics; }
+    public String getArtistId() { return artistId; }
+    public List<String> getFeaturedArtists() { return new ArrayList<>(featuredArtists); }
+    public String getAlbumId() { return albumId; }
+    public String getGenre() { return genre; }
+    public List<String> getTags() { return new ArrayList<>(tags); }
+    public int getViews() { return views; }
+    public LocalDate getReleaseDate() { return releaseDate; }
+    public List<LyricEdit> getPendingEdits() { return new ArrayList<>(pendingEdits); }
+    public List<Comment> getComments() { return new ArrayList<>(comments); }
+
+    // Setters
+    public void setTitle(String title) { this.title = title; }
+    public void setLyrics(String lyrics) { this.lyrics = lyrics; }
+    public void setAlbumId(String albumId) { this.albumId = albumId; }
+    public void setGenre(String genre) { this.genre = genre; }
+    public void setReleaseDate(LocalDate releaseDate) { this.releaseDate = releaseDate; }
+
+    // Permissions
+    public void addFeaturedArtist(String artist) {
+        if (!featuredArtists.contains(artist)) {
+            featuredArtists.add(artist);
+            editPermissions.put(artist, false);
+        }
+    }
+
+    public void removeFeaturedArtist(String artist) {
+        featuredArtists.remove(artist);
+        editPermissions.remove(artist);
+    }
+
+    public void setEditPermission(String artist, boolean allowed) {
+        if (featuredArtists.contains(artist)) {
+            editPermissions.put(artist, allowed);
+        }
+    }
+
+    public boolean canEdit(String artist) {
+        return artistId.equals(artist) || Boolean.TRUE.equals(editPermissions.get(artist));
+    }
+
+    public void incrementViews() { views++; }
+
+    public void addComment(Comment comment) {
+        comments.add(comment);
+    }
+
+    public void suggestLyricEdit(String userId, String newLyrics) {
+        pendingEdits.add(new LyricEdit(userId, newLyrics));
+    }
+
+    public void approveLyricEdit(int editIndex) {
+        if (editIndex >= 0 && editIndex < pendingEdits.size()) {
+            lyrics = pendingEdits.get(editIndex).getNewLyrics();
+            pendingEdits.remove(editIndex);
+        }
+    }
+
+    public void rejectLyricEdit(int editIndex) {
+        if (editIndex >= 0 && editIndex < pendingEdits.size()) {
+            pendingEdits.remove(editIndex);
+        }
+    }
+}
+// ✅ Finalized SongController.java - with I/O handling and album logic
+package genius;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class SongController {
+
+    public static Song createSong(String title, String lyrics, String artistId, String albumId) {
+        Song song = new Song(null, title, lyrics, artistId);
+        song.setAlbumId(albumId != null ? albumId : Song.SINGLE_ALBUM_ID);
+
+        try {
+            DataStorage.saveSong(song);
+            if (!song.getAlbumId().equals(Song.SINGLE_ALBUM_ID)) {
+                Album album = AlbumStorage.getAlbumById(song.getAlbumId());
+                if (album != null) {
+                    album.addSong(song.getId());
+                    AlbumStorage.saveAlbum(album);
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error creating song: " + e.getMessage());
+        }
+        return song;
+    }
+
+    public static void updateSong(Song song) {
+        try {
+            DataStorage.saveSong(song);
+        } catch (IOException e) {
+            System.err.println("Failed to update song: " + e.getMessage());
+        }
+    }
+
+    public static void deleteSong(String songId) {
+        try {
+            DataStorage.deleteSong(songId);
+        } catch (IOException e) {
+            System.err.println("Failed to delete song: " + e.getMessage());
+        }
+    }
+
+    public static void incrementViews(String songId) {
+        Song song = DataStorage.loadAllSongs().stream()
+                .filter(s -> s.getId().equals(songId))
+                .findFirst().orElse(null);
+        if (song != null) {
+            song.incrementViews();
+            try {
+                DataStorage.saveSong(song);
+            } catch (IOException e) {
+                System.err.println("Failed to update views: " + e.getMessage());
+            }
+        }
+    }
+
+    public static List<Song> getSongsByAlbum(String albumId) {
+        List<Song> albumSongs = new ArrayList<>();
+        for (Song song : DataStorage.loadAllSongs()) {
+            if (albumId.equals(song.getAlbumId())) {
+                albumSongs.add(song);
+            }
+        }
+        return albumSongs;
+    }
+
+    public static List<Song> searchSongs(String query) {
+        List<Song> results = new ArrayList<>();
+        for (Song song : DataStorage.loadAllSongs()) {
+            if (song.getTitle().toLowerCase().contains(query.toLowerCase()) ||
+                    song.getArtistId().toLowerCase().contains(query.toLowerCase()) ||
+                    song.getFeaturedArtists().toString().toLowerCase().contains(query.toLowerCase()) ||
+                    song.getLyrics().toLowerCase().contains(query.toLowerCase())) {
+                results.add(song);
+            }
+        }
+        return results;
+    }
+}
+package genius;
+
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+
+public class SongStorage {
+    private static final String SONGS_DIR = "data/songs/";
+    private static final String LYRICS_DIR = "data/lyrics/";
+    private static Map<String, Song> songs = new HashMap<>();
+
+    static {
+        new File(SONGS_DIR).mkdirs();
+        new File(LYRICS_DIR).mkdirs();
+        loadAllSongs();
+    }
+
+    public static void saveSong(Song song) {
+        try {
+            Path songFile = Paths.get(SONGS_DIR + song.getId() + ".song");
+            try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(songFile))) {
+                oos.writeObject(song);
+            }
+
+            Path lyricsFile = Paths.get(LYRICS_DIR + song.getId() + ".txt");
+            Files.write(lyricsFile, song.getLyrics().getBytes());
+
+            songs.put(song.getId(), song);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static Song getSong(String id) {
+        Song song = songs.get(id);
+        if (song == null) {
+            try {
+                Path songFile = Paths.get(SONGS_DIR + id + ".song");
+                if (Files.exists(songFile)) {
+                    try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(songFile))) {
+                        song = (Song) ois.readObject();
+                        songs.put(id, song);
+                    }
+                }
+            } catch (IOException | ClassNotFoundException e) {
+                e.printStackTrace();
+            }
+        }
+        return song;
+    }
+
+    public static List<Song> getSongsByArtist(String artist) {
+        List<Song> artistSongs = new ArrayList<>();
+        for (Song song : songs.values()) {
+            if (song.getArtistId().equals(artist) ||
+                    song.getFeaturedArtists().contains(artist)) {
+                artistSongs.add(song);
+            }
+        }
+        return artistSongs;
+    }
+
+    public static List<Song> getAllSongs() {
+        return new ArrayList<>(songs.values());
+    }
+
+    public static void deleteSong(String id) {
+        try {
+            Files.deleteIfExists(Paths.get(SONGS_DIR + id + ".song"));
+            Files.deleteIfExists(Paths.get(LYRICS_DIR + id + ".txt"));
+            songs.remove(id);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void loadAllSongs() {
+        try {
+            Files.list(Paths.get(SONGS_DIR))
+                    .filter(path -> path.toString().endsWith(".song"))
+                    .forEach(path -> {
+                        try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(path))) {
+                            Song song = (Song) ois.readObject();
+                            songs.put(song.getId(), song);
+                        } catch (IOException | ClassNotFoundException e) {
+                            e.printStackTrace();
+                        }
+                    });
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}package genius;
+
+import javafx.collections.FXCollections;
+import javafx.geometry.*;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.scene.text.*;
+import java.util.*;
+import java.io.IOException;
+
+public class SongViewScreen {
+    private static final int COMMENT_HEIGHT = 80;
+    private static final int COMMENT_FONT_SIZE = 11;
+
+    public static void show(Song song) {
+        DataStorage.incrementSongViews(song.getId());
+
+        BorderPane layout = new BorderPane();
+        layout.setPadding(new Insets(8));
+
+        HBox header = new HBox(5);
+        Button backBtn = new Button("← Back");
+        backBtn.setOnAction(e -> HomeScreen.show());
+
+        Label titleLabel = new Label(song.getTitle());
+        titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        header.getChildren().addAll(backBtn, titleLabel);
+        layout.setTop(header);
+
+        VBox songInfo = new VBox(5);
+        songInfo.setPadding(new Insets(5));
+        songInfo.getChildren().addAll(
+                new Label("Artist: " + song.getArtistId()),
+                new Label("Genre: " + Optional.ofNullable(song.getGenre()).orElse("Unknown")),
+                new Label("Tags: " + String.join(", ", song.getTags())),
+                new Label("Views: " + DataStorage.loadSongViews(song.getId())),
+                new Label("Release Date: " + song.getReleaseDate())
+        );
+
+        TextArea lyricsArea = new TextArea(song.getLyrics());
+        lyricsArea.setEditable(false);
+        lyricsArea.setWrapText(true);
+        lyricsArea.setPrefHeight(200);
+        lyricsArea.setStyle("-fx-font-size: 12px;");
+
+        VBox centerBox = new VBox(10, songInfo, new Label("Lyrics:"), lyricsArea);
+        layout.setCenter(centerBox);
+
+        VBox commentContainer = new VBox(5);
+        commentContainer.setPadding(new Insets(5));
+
+        ListView<Comment> commentList = new ListView<>();
+        commentList.setPrefHeight(COMMENT_HEIGHT);
+        commentList.setStyle("-fx-font-size: " + COMMENT_FONT_SIZE + "px;");
+
+        try {
+            commentList.setItems(FXCollections.observableArrayList(song.getComments()));
+        } catch (Exception e) {
+            commentList.setPlaceholder(new Label("No comments yet"));
+        }
+
+        commentList.setCellFactory(lv -> new ListCell<Comment>() {
+            @Override
+            protected void updateItem(Comment comment, boolean empty) {
+                super.updateItem(comment, empty);
+                if (empty || comment == null) {
+                    setText(null);
+                    setGraphic(null);
+                } else {
+                    VBox box = new VBox(2);
+                    Label userLabel = new Label(comment.getUserId() + ":");
+                    userLabel.setStyle("-fx-font-weight: bold;");
+
+                    Text commentText = new Text(comment.getText());
+                    commentText.setWrappingWidth(400);
+
+                    box.getChildren().addAll(userLabel, commentText);
+                    setGraphic(box);
+                }
+            }
+        });
+
+        HBox inputBox = new HBox(5);
+        TextField commentField = new TextField();
+        commentField.setPromptText("Write a comment...");
+        commentField.setPrefWidth(300);
+
+        Button postBtn = new Button("Post");
+        postBtn.setPrefWidth(60);
+        postBtn.setOnAction(e -> postComment(song, commentField, commentList));
+
+        commentField.setOnAction(e -> postComment(song, commentField, commentList));
+
+        inputBox.getChildren().addAll(commentField, postBtn);
+        commentContainer.getChildren().addAll(commentList, inputBox);
+        layout.setBottom(commentContainer);
+
+        Scene scene = new Scene(layout, 600, 500);
+        Main.primaryStage.setScene(scene);
+    }
+
+    private static void postComment(Song song, TextField field, ListView<Comment> list) {
+        String text = field.getText().trim();
+        if (text.isEmpty() || Main.currentUser == null) return;
+
+        try {
+            Comment comment = new Comment(
+                    UUID.randomUUID().toString(),
+                    Main.currentUser.getUsername(),
+                    song.getId(),
+                    text
+            );
+
+            DataStorage.saveComment(comment);
+            song.addComment(comment);
+            list.getItems().add(comment);
+            field.clear();
+
+        } catch (IOException e) {
+            System.err.println("Failed to save comment: " + e.getMessage());
+            new Alert(Alert.AlertType.ERROR, "Failed to save comment").show();
+        }
+    }
+}
+package genius;
+
+import java.io.Serializable;
+
+public class User implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private String username;
+    private String password;
+    private String email;
+    private boolean isAdmin;
+    private boolean isArtist;
+    private boolean isVerified;
+
+
+    public User(String username, String password, String email,
+                boolean isAdmin, boolean isArtist, boolean isVerified) {
+        this.username = username;
+        this.password = password;
+        this.email = email;
+        this.isAdmin = isAdmin;
+        this.isArtist = isArtist;
+        this.isVerified = isVerified;
+    }
+    public boolean isVerified() { return isVerified; }
+    public void setVerified(boolean verified) { isVerified = verified; }
+
+    public String getUsername() { return username; }
+    public String getPassword() { return password; }
+    public String getEmail() { return email; }
+    public boolean isAdmin() { return isAdmin; }
+    public boolean isArtist() { return isArtist; }
+
+    public void setPassword(String password) { this.password = password; }
+    public void setAdmin(boolean admin) { isAdmin = admin; }
+    public void setArtist(boolean artist) { isArtist = artist; }
+
+}package genius;
+
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.geometry.*;
+
+public class UserDashboard {
+    public static void show() {
+        BorderPane layout = new BorderPane();
+        layout.setPadding(new Insets(20));
+
+        HBox topBar = new HBox(10);
+        Button homeBtn = new Button("Home");
+        Button profileBtn = new Button("My Profile");
+        Button logoutBtn = new Button("Logout");
+
+        homeBtn.setOnAction(e -> HomeScreen.show());
+        profileBtn.setOnAction(e -> UserProfileScreen.show(Main.currentUser));
+        logoutBtn.setOnAction(e -> {
+            Main.currentUser = null;
+            MainMenuScreen.show();
+        });
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        topBar.getChildren().addAll(homeBtn, profileBtn, spacer, logoutBtn);
+        layout.setTop(topBar);
+
+        // Main content
+        Label welcomeLabel = new Label("Welcome, " + Main.currentUser.getUsername() + "!");
+        welcomeLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        layout.setCenter(welcomeLabel);
+
+        Main.primaryStage.setScene(new Scene(layout, 800, 600));
+    }
+}package genius;
+
+import javafx.collections.FXCollections;
+import javafx.geometry.*;
+import javafx.scene.*;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.scene.text.*;
+
+import java.io.IOException;
+import java.nio.file.*;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class UserProfileScreen {
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy");
+
+    public static void show(User user) {
+        VBox layout = new VBox(20);
+        layout.setPadding(new Insets(20));
+        layout.setAlignment(Pos.TOP_CENTER);
+
+        // Header
+        HBox header = createHeader(user);
+        layout.getChildren().add(header);
+
+        // User Info Section
+        VBox infoBox = createUserInfoBox(user);
+        layout.getChildren().add(infoBox);
+
+        // Content Section
+        TabPane contentTabs = createContentTabs(user);
+        layout.getChildren().add(contentTabs);
+
+        // Stats Section
+        VBox statsBox = createStatsBox(user);
+        layout.getChildren().add(statsBox);
+
+        // Comments Section (if any)
+        if (DataStorage.countUserComments(user.getUsername()) > 0) {
+            VBox commentsBox = createCommentsBox(user);
+            layout.getChildren().add(commentsBox);
+        }
+
+        ScrollPane scrollPane = new ScrollPane(layout);
+        scrollPane.setFitToWidth(true);
+
+        Scene scene = new Scene(scrollPane, 800, 600);
+        Main.primaryStage.setScene(scene);
+    }
+
+    private static HBox createHeader(User user) {
+        HBox header = new HBox(10);
+        Button backBtn = new Button("← Back");
+        backBtn.setOnAction(e -> returnToDashboard(user));
+
+        Label titleLabel = new Label(user.getUsername() + "'s Profile");
+        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        // Follow button for artists
+        if (user.isArtist() && user.isVerified() &&
+                Main.currentUser != null && !user.getUsername().equals(Main.currentUser.getUsername())) {
+            Button followBtn = createFollowButton(user);
+            header.getChildren().addAll(backBtn, spacer, titleLabel, followBtn);
+        } else {
+            header.getChildren().addAll(backBtn, spacer, titleLabel);
+        }
+
+        return header;
+    }
+
+    private static Button createFollowButton(User user) {
+        Button followBtn = new Button();
+        final boolean[] alreadyFollowing = {UserStorage.isFollowing(Main.currentUser.getUsername(), user.getUsername())};
+        followBtn.setText(alreadyFollowing[0] ? "Unfollow" : "Follow");
+
+        followBtn.setOnAction(e -> {
+            if (alreadyFollowing[0]) {
+                UserStorage.unfollowArtist(Main.currentUser.getUsername(), user.getUsername());
+                followBtn.setText("Follow");
+            } else {
+                UserStorage.followArtist(Main.currentUser.getUsername(), user.getUsername());
+                followBtn.setText("Unfollow");
+            }
+            alreadyFollowing[0] = !alreadyFollowing[0];
+        });
+        return followBtn;
+    }
+
+    private static VBox createUserInfoBox(User user) {
+        VBox infoBox = new VBox(10);
+        infoBox.setPadding(new Insets(20));
+        infoBox.setStyle("-fx-background-color: #f5f5f5; -fx-border-radius: 5;");
+
+        Label emailLabel = new Label("Email: " + user.getEmail());
+        Label memberSinceLabel = new Label("Member since: " + getRegistrationDate(user));
+        Label artistStatusLabel = new Label("Artist: " + (user.isArtist() ? "✓ Verified" : "Regular user"));
+
+        infoBox.getChildren().addAll(emailLabel, memberSinceLabel, artistStatusLabel);
+        return infoBox;
+    }
+
+    private static TabPane createContentTabs(User user) {
+        TabPane tabPane = new TabPane();
+
+        // Songs Tab
+        if (user.isArtist()) {
+            Tab songsTab = new Tab("Songs");
+            songsTab.setContent(createSongsList(user));
+            songsTab.setClosable(false);
+            tabPane.getTabs().add(songsTab);
+        }
+
+        // Albums Tab
+        if (user.isArtist()) {
+            Tab albumsTab = new Tab("Albums");
+            albumsTab.setContent(createAlbumsList(user));
+            albumsTab.setClosable(false);
+            tabPane.getTabs().add(albumsTab);
+        }
+
+        // Following Tab
+        if (UserStorage.countFollowing(user.getUsername()) > 0) {
+            Tab followingTab = new Tab("Following");
+            followingTab.setContent(createFollowingList(user));
+            followingTab.setClosable(false);
+            tabPane.getTabs().add(followingTab);
+        }
+
+        return tabPane;
+    }
+
+    private static ListView<Song> createSongsList(User user) {
+        ListView<Song> songList = new ListView<>();
+        try {
+            List<Song> songs = DataStorage.loadArtistSongs(user.getUsername());
+            songList.setItems(FXCollections.observableArrayList(songs));
+
+            songList.setCellFactory(lv -> new ListCell<Song>() {
+                @Override
+                protected void updateItem(Song song, boolean empty) {
+                    super.updateItem(song, empty);
+                    if (empty || song == null) {
+                        setText(null);
+                    } else {
+                        setText(String.format("%s (%d views)",
+                                song.getTitle(), song.getViews()));
+                    }
+                }
+            });
+
+            songList.setOnMouseClicked(e -> {
+                if (e.getClickCount() == 2) {
+                    Song selected = songList.getSelectionModel().getSelectedItem();
+                    if (selected != null) SongViewScreen.show(selected);
+                }
+            });
+        } catch (Exception e) {
+            songList.setPlaceholder(new Label("Error loading songs"));
+        }
+        return songList;
+    }
+
+    private static ListView<Album> createAlbumsList(User user) {
+        ListView<Album> albumList = new ListView<>();
+        try {
+            List<Album> albums = AlbumStorage.getAlbumsByArtist(user.getUsername());
+            albumList.setItems(FXCollections.observableArrayList(albums));
+
+            albumList.setCellFactory(lv -> new ListCell<Album>() {
+                @Override
+                protected void updateItem(Album album, boolean empty) {
+                    super.updateItem(album, empty);
+                    if (empty || album == null) {
+                        setText(null);
+                    } else {
+                        setText(String.format("%s (%d tracks)",
+                                album.getTitle(), album.getSongIds().size()));
+                    }
+                }
+            });
+
+            albumList.setOnMouseClicked(e -> {
+                if (e.getClickCount() == 2) {
+                    Album selected = albumList.getSelectionModel().getSelectedItem();
+                    if (selected != null) AlbumViewScreen.show(selected);
+                }
+            });
+        } catch (Exception e) {
+            albumList.setPlaceholder(new Label("Error loading albums"));
+        }
+        return albumList;
+    }
+
+    private static ListView<String> createFollowingList(User user) {
+        ListView<String> followingList = new ListView<>();
+        try {
+            List<String> artists = UserStorage.getFollowedArtists(user.getUsername());
+            followingList.setItems(FXCollections.observableArrayList(artists));
+
+            followingList.setOnMouseClicked(e -> {
+                if (e.getClickCount() == 2) {
+                    String selected = followingList.getSelectionModel().getSelectedItem();
+                    if (selected != null) {
+                        User artistUser = UserStorage.getUser(selected);
+                        if (artistUser != null) {
+                            UserProfileScreen.show(artistUser);
+                        }
+                    }
+                }
+            });
+        } catch (Exception e) {
+            followingList.setPlaceholder(new Label("Error loading followed artists"));
+        }
+        return followingList;
+    }
+
+    private static VBox createStatsBox(User user) {
+        VBox statsBox = new VBox(10);
+        statsBox.setPadding(new Insets(15));
+
+        Label statsLabel = new Label("Activity Statistics");
+        statsLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        int commentCount = DataStorage.countUserComments(user.getUsername());
+        int likeCount = countUserLikes(user.getUsername());
+        int followingCount = UserStorage.countFollowing(user.getUsername());
+        int followerCount = UserStorage.countFollowers(user.getUsername());
+
+        GridPane statsGrid = new GridPane();
+        statsGrid.setHgap(20);
+        statsGrid.setVgap(10);
+
+        statsGrid.add(new Label("Comments:"), 0, 0);
+        statsGrid.add(new Label(String.valueOf(commentCount)), 1, 0);
+        statsGrid.add(new Label("Likes Given:"), 0, 1);
+        statsGrid.add(new Label(String.valueOf(likeCount)), 1, 1);
+        statsGrid.add(new Label("Following:"), 0, 2);
+        statsGrid.add(new Label(followingCount + " artists"), 1, 2);
+        statsGrid.add(new Label("Followers:"), 0, 3);
+        statsGrid.add(new Label(followerCount + " users"), 1, 3);
+
+        statsBox.getChildren().addAll(statsLabel, statsGrid);
+        return statsBox;
+    }
+
+    private static VBox createCommentsBox(User user) {
+        VBox commentsBox = new VBox(10);
+        commentsBox.setPadding(new Insets(15));
+
+        Label commentsLabel = new Label("Recent Comments");
+        commentsLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        ListView<Comment> commentsList = new ListView<>();
+        try {
+            commentsList.setItems(FXCollections.observableArrayList(
+                    DataStorage.loadUserComments(user.getUsername()).stream()
+                            .sorted(Comparator.comparing(Comment::getTimestamp).reversed())
+                            .limit(5)
+                            .collect(Collectors.toList())
+            ));
+
+            commentsList.setCellFactory(lv -> new ListCell<Comment>() {
+                @Override
+                protected void updateItem(Comment comment, boolean empty) {
+                    super.updateItem(comment, empty);
+                    if (empty || comment == null) {
+                        setText(null);
+                    } else {
+                        try {
+                            Song song = SongStorage.getSong(comment.getSongId());
+                            if (song != null) {
+                                setText(String.format("On '%s' (%s):\n%s",
+                                        song.getTitle(),
+                                        comment.getTimestamp().format(DATE_FORMAT),
+                                        comment.getText()));
+                            } else {
+                                setText("Comment on deleted song");
+                            }
+                        } catch (Exception e) {
+                            setText("Error loading comment");
+                        }
+                    }
+                }
+            });
+        } catch (Exception e) {
+            commentsList.setPlaceholder(new Label("Error loading comments"));
+        }
+
+        commentsBox.getChildren().addAll(commentsLabel, commentsList);
+        return commentsBox;
+    }
+
+    private static void returnToDashboard(User user) {
+        if (Main.currentUser == null) {
+            MainMenuScreen.show();
+        } else if (user.isAdmin()) {
+            AdminDashboard.show();
+        } else if (user.isArtist()) {
+            ArtistDashboard.show();
+        } else {
+            UserDashboard.show();
+        }
+    }
+
+    private static int countUserLikes(String username) {
+        try {
+            return (int) DataStorage.loadAllSongs().stream()
+                    .flatMap(song -> song.getComments().stream())
+                    .filter(comment -> comment.getUserId().equals(username))
+                    .count();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private static String getRegistrationDate(User user) {
+        // In a real app, this would come from user's registration date
+        // For now, we'll use a placeholder
+        return "April 2025";
+    }
+}package genius;
+
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class UserStorage {
+    private static final String PROJECT_DIR = System.getProperty("user.dir");
+    private static final String DATA_DIR = PROJECT_DIR + File.separator + "data" + File.separator;
+    private static final String USERS_FILE = DATA_DIR + "users.txt";
+    private static final String BANNED_EMAILS_FILE = DATA_DIR + "banned_emails.txt";
+    public static final String FOLLOWING_FILE = DATA_DIR + "following.txt";
+
+    private static Map<String, User> users = new HashMap<>();
+    private static Set<String> bannedEmails = new HashSet<>();
+
+    static {
+        ensureDataDirectoryExists();
+        loadAllData();
+        createDefaultAdmin();
+    }
+
+    private static void ensureDataDirectoryExists() {
+        try {
+            Path path = Paths.get(DATA_DIR);
+            if (!Files.exists(path)) {
+                Files.createDirectories(path);
+            }
+            if (!Files.exists(Paths.get(USERS_FILE))) {
+                Files.createFile(Paths.get(USERS_FILE));
+            }
+            if (!Files.exists(Paths.get(BANNED_EMAILS_FILE))) {
+                Files.createFile(Paths.get(BANNED_EMAILS_FILE));
+            }
+            if (!Files.exists(Paths.get(FOLLOWING_FILE))) {
+                Files.createFile(Paths.get(FOLLOWING_FILE));
+            }
+        } catch (IOException e) {
+            System.err.println("Error creating data files: " + e.getMessage());
+        }
+    }
+
+    private static void loadAllData() {
+        loadUsers();
+        loadBannedEmails();
+    }
+
+    private static void loadUsers() {
+        users.clear();
+        try {
+            List<String> lines = Files.readAllLines(Paths.get(USERS_FILE));
+            for (String line : lines) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                String[] parts = line.split("\\|");
+                if (parts.length == 6) {
+                    User user = new User(
+                            parts[0].trim(),
+                            parts[1].trim(),
+                            parts[2].trim(),
+                            Boolean.parseBoolean(parts[3].trim()),
+                            Boolean.parseBoolean(parts[4].trim()),
+                            Boolean.parseBoolean(parts[5].trim())
+                    );
+                    users.put(user.getUsername().toLowerCase(), user);
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error loading users: " + e.getMessage());
+        }
+    }
+
+    private static void loadBannedEmails() {
+        try {
+            if (Files.exists(Paths.get(BANNED_EMAILS_FILE))) {
+                bannedEmails.addAll(Files.readAllLines(Paths.get(BANNED_EMAILS_FILE)));
+            }
+        } catch (IOException e) {
+            System.err.println("Error loading banned emails: " + e.getMessage());
+        }
+    }
+
+    private static void createDefaultAdmin() {
+        if (!users.containsKey("admin")) {
+            registerUser("admin", "admin123", "admin@genius.com", true, false, true);
+        }
+    }
+
+    public static boolean validateLogin(String username, String password) {
+        User user = users.get(username.toLowerCase());
+        if (user == null) return false;
+        return user.getPassword().equals(password);
+    }
+
+
+    public static boolean userExists(String username) {
+        return users.containsKey(username.toLowerCase());
+    }
+
+    public static boolean emailExists(String email) {
+        return users.values().stream()
+                .anyMatch(user -> user.getEmail().equalsIgnoreCase(email));
+    }
+
+    public static boolean isEmailBanned(String email) {
+        return bannedEmails.contains(email.toLowerCase());
+    }
+
+    public static void banEmail(String email) {
+        bannedEmails.add(email.toLowerCase());
+        saveBannedEmails();
+    }
+
+    public static void registerUser(String username, String password, String email,
+                                    boolean isAdmin, boolean isArtist, boolean isVerified) {
+        users.put(username.toLowerCase(), new User(username, password, email, isAdmin, isArtist, isVerified));
+        saveUsers();
+    }
+
+    public static User getUser(String username)
+    {
+        UserStorage.loadUsers();
+        return users.get(username.toLowerCase());
+    }
+
+    public static Map<String, User> getAllUsers() {
+        return new HashMap<>(users);
+    }
+
+    public static void updateUser(User user) {
+        if (user == null) return;
+        users.put(user.getUsername().toLowerCase(), user);
+        saveUsers();
+        if (user.isArtist() && user.isVerified()) {
+            Artist artist = ArtistStorage.getArtistByUsername(user.getUsername());
+            if (artist == null) {
+                artist = new Artist(UUID.randomUUID().toString(), user.getUsername());
+                ArtistStorage.saveArtist(artist);
+            }
+        }
+    }
+
+    public static void deleteUser(String username) {
+        User user = users.get(username.toLowerCase());
+        if (user != null) {
+            banEmail(user.getEmail());
+        }
+        users.remove(username.toLowerCase());
+        saveUsers();
+    }
+
+    private static void saveUsers() {
+        try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(USERS_FILE))) {
+            for (User user : users.values()) {
+                writer.write(String.format("%s|%s|%s|%b|%b|%b%n",
+                        user.getUsername(),
+                        user.getPassword(),
+                        user.getEmail(),
+                        user.isAdmin(),
+                        user.isArtist(),
+                        user.isVerified()));
+            }
+        } catch (IOException e) {
+            System.err.println("Error saving users: " + e.getMessage());
+        }
+    }
+
+    private static void saveBannedEmails() {
+        try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(BANNED_EMAILS_FILE))) {
+            for (String email : bannedEmails) {
+                writer.write(email);
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            System.err.println("Error saving banned emails: " + e.getMessage());
+        }
+    }
+
+    public static int countFollowing(String username) {
+        try {
+            if (Files.exists(Paths.get(FOLLOWING_FILE))) {
+                return (int) Files.lines(Paths.get(FOLLOWING_FILE))
+                        .filter(line -> line.startsWith(username + "|"))
+                        .count();
+            }
+        } catch (IOException e) {
+            System.err.println("Error counting following: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    public static int countFollowers(String username) {
+        try {
+            if (Files.exists(Paths.get(FOLLOWING_FILE))) {
+                return (int) Files.lines(Paths.get(FOLLOWING_FILE))
+                        .filter(line -> line.endsWith("|" + username))
+                        .count();
+            }
+        } catch (IOException e) {
+            System.err.println("Error counting followers: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    public static boolean isFollowing(String follower, String artist) {
+        try {
+            if (Files.exists(Paths.get(FOLLOWING_FILE))) {
+                return Files.lines(Paths.get(FOLLOWING_FILE))
+                        .anyMatch(line -> line.equals(follower + "|" + artist));
+            }
+        } catch (IOException e) {
+            System.err.println("Error checking follow status: " + e.getMessage());
+        }
+        return false;
+    }
+
+    public static void followArtist(String follower, String artist) {
+        try {
+            Files.write(Paths.get(FOLLOWING_FILE),
+                    (follower + "|" + artist + System.lineSeparator()).getBytes(),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            System.err.println("Error following artist: " + e.getMessage());
+        }
+    }
+
+    public static void unfollowArtist(String follower, String artist) {
+        try {
+            if (Files.exists(Paths.get(FOLLOWING_FILE))) {
+                List<String> lines = Files.readAllLines(Paths.get(FOLLOWING_FILE));
+                lines.removeIf(line -> line.equals(follower + "|" + artist));
+                Files.write(Paths.get(FOLLOWING_FILE), lines);
+            }
+        } catch (IOException e) {
+            System.err.println("Error unfollowing artist: " + e.getMessage());
+        }
+    }
+
+    public static List<String> getFollowedArtists(String username) {
+        try {
+            if (Files.exists(Paths.get(FOLLOWING_FILE))) {
+                return Files.lines(Paths.get(FOLLOWING_FILE))
+                        .filter(line -> line.startsWith(username + "|"))
+                        .map(line -> line.split("\\|")[1])
+                        .collect(Collectors.toList());
+            }
+        } catch (IOException e) {
+            System.err.println("Error getting followed artists: " + e.getMessage());
+        }
+        return new ArrayList<>();
+    }
+}
