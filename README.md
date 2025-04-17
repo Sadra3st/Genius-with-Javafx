@@ -104,6 +104,8 @@ Key highlights:
 
 ![Add](screenshotes\Addsong.png)
 *Artists can add songs to their albums*
+
+
 ---
 
 ## 💻 Tech Stack
