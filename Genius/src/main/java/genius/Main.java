@@ -2,6 +2,7 @@ package genius;
 
 import javafx.application.Application;
 import javafx.scene.control.Alert;
+import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
 public class Main extends Application {
@@ -14,6 +15,7 @@ public class Main extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+        primaryStage.getIcons().add(new Image("app.png"));
         try {
             ArtistVerification.loadRequests();
 

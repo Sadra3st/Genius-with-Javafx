@@ -4,6 +4,8 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -28,14 +30,13 @@ public class HomeScreen {
         Tab albumsTab = new Tab("Albums", albumListView);
         albumsTab.setClosable(false);
 
-        // Initialize tab pane
+
         tabPane = new TabPane(songsTab, albumsTab);
 
-        // Configure list views
+
         configureSongListView();
         configureAlbumListView();
 
-        // Create and add top bar with refresh button
         HBox topBar = createTopBar();
         layout.setTop(topBar);
 
@@ -100,6 +101,11 @@ public class HomeScreen {
         HBox topBar = new HBox(10);
         topBar.setPadding(new Insets(0, 0, 20, 0));
 
+        // Logo
+        ImageView logoView = new ImageView(new Image("file:genius_logo.png")); // Ensure the path is correct
+        logoView.setFitHeight(40); // Set desired height
+        logoView.setPreserveRatio(true);
+
         // Back button
         Button backBtn = new Button("← Back");
         backBtn.setOnAction(e -> returnToPreviousScreen());
@@ -119,9 +125,11 @@ public class HomeScreen {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        topBar.getChildren().addAll(backBtn, refreshBtn, spacer, searchField, searchBtn);
+        // Add logo and other components to top bar
+        topBar.getChildren().addAll(logoView, backBtn, refreshBtn, spacer, searchField, searchBtn);
         return topBar;
     }
+
 
     public static void refreshContent() {
         try {
