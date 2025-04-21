@@ -17,6 +17,7 @@ public class Artist implements Serializable {
         this.id = id;
         this.username = username;
         this.followerCount = 0;
+        this.followers = new ArrayList<>();
     }
 
 
@@ -33,4 +34,27 @@ public class Artist implements Serializable {
     public void removeFollower() { followerCount--; }
     public void addSong(String songId) { songIds.add(songId); }
     public void removeSong(String songId) { songIds.remove(songId); }
+    private List<String> followers = new ArrayList<>();
+
+    public List<String> getFollowers() {
+        if (followers == null) followers = new ArrayList<>();
+        return new ArrayList<>(followers);
+    }
+
+    public void addFollower(String username) {
+        if (followers == null) followers = new ArrayList<>();
+        if (!followers.contains(username)) {
+            followers.add(username);
+            followerCount++;
+        }
+    }
+
+    public void removeFollower(String username) {
+        if (followers == null) followers = new ArrayList<>();
+        if (followers.remove(username)) {
+            followerCount--;
+        }
+    }
+
+
 }

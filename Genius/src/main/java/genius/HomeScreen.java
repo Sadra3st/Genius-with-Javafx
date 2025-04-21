@@ -14,37 +14,62 @@ public class HomeScreen {
     private static TabPane tabPane;
     private static ListView<Song> songListView;
     private static ListView<Album> albumListView;
+    private static ListView<Artist> followedArtistsListView;
+
 
     public static void show() {
         BorderPane layout = new BorderPane();
         layout.setPadding(new Insets(20));
 
-        // Initialize list views
+        // ✅ Initialize UI components BEFORE using them
         songListView = new ListView<>();
         albumListView = new ListView<>();
+        followedArtistsListView = new ListView<>();
 
-        // Create tabs
-        Tab songsTab = new Tab("Songs", songListView);
+        // ✅ Set up tabPane first
+        tabPane = new TabPane();
+
+        // Create placeholder tabs
+        Tab songsTab = new Tab("Songs");
         songsTab.setClosable(false);
 
-        Tab albumsTab = new Tab("Albums", albumListView);
+        Tab albumsTab = new Tab("Albums");
         albumsTab.setClosable(false);
 
+        Tab followedTab = new Tab("Followed Artists");
+        followedTab.setClosable(false);
 
-        tabPane = new TabPane(songsTab, albumsTab);
+        tabPane.getTabs().addAll(songsTab, albumsTab, followedTab);
 
 
         configureSongListView();
         configureAlbumListView();
+        configureFollowedArtistListView();
 
-        HBox topBar = createTopBar();
-        layout.setTop(topBar);
-
+        layout.setTop(createTopBar());
         layout.setCenter(tabPane);
-        refreshContent(); // Initial load
+        refreshContent();
 
         Scene scene = new Scene(layout, 900, 600);
         Main.primaryStage.setScene(scene);
+    }
+
+
+
+    private static MenuItem createViewArtistMenuItem(ListView<Song> listView) {
+        MenuItem item = new MenuItem("View Artist");
+        item.setOnAction(e -> {
+            Song selected = listView.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                Artist artist = ArtistStorage.getArtistByUsername(selected.getArtistId());
+                if (artist != null) {
+                    ArtistProfileScreen.show(artist);
+                } else {
+                    new Alert(Alert.AlertType.INFORMATION, "This artist has no profile.").show();
+                }
+            }
+        });
+        return item;
     }
 
     private static void configureSongListView() {
@@ -62,6 +87,7 @@ public class HomeScreen {
                 }
             }
         });
+
         songListView.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
                 Song selected = songListView.getSelectionModel().getSelectedItem();
@@ -70,6 +96,60 @@ public class HomeScreen {
                 }
             }
         });
+
+
+        Button viewArtistBtn = new Button("View Artist");
+        viewArtistBtn.setOnAction(e -> {
+            Song selected = songListView.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                Artist artist = ArtistStorage.getArtistByUsername(selected.getArtistId());
+                if (artist != null) {
+                    ArtistProfileScreen.show(artist);
+                } else {
+                    new Alert(Alert.AlertType.INFORMATION, "This artist has no profile.").show();
+                }
+            }
+        });
+
+        VBox container = new VBox(10, songListView, viewArtistBtn);
+        container.setPadding(new Insets(10));
+        Tab songsTab = tabPane.getTabs().get(0);
+        songsTab.setContent(container);
+    }
+    private static void configureFollowedArtistListView() {
+        followedArtistsListView.setCellFactory(lv -> new ListCell<Artist>() {
+            @Override
+            protected void updateItem(Artist artist, boolean empty) {
+                super.updateItem(artist, empty);
+                if (empty || artist == null) {
+                    setText(null);
+                } else {
+                    setText(String.format("%s (Followers: %d)", artist.getUsername(), artist.getFollowerCount()));
+                }
+            }
+        });
+
+        followedArtistsListView.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) {
+                Artist selected = followedArtistsListView.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    ArtistProfileScreen.show(selected);
+                }
+            }
+        });
+
+        VBox container = new VBox(10, followedArtistsListView);
+        container.setPadding(new Insets(10));
+        Tab followedTab = tabPane.getTabs().get(2);
+        followedTab.setContent(container);
+
+
+        if (Main.currentUser != null) {
+            List<Artist> followed = ArtistStorage.getAllArtists().stream()
+                    .filter(a -> a.getFollowers().contains(Main.currentUser.getUsername()))
+                    .collect(Collectors.toList());
+            followedArtistsListView.setItems(FXCollections.observableArrayList(followed));
+        }
     }
 
     private static void configureAlbumListView() {
@@ -87,6 +167,7 @@ public class HomeScreen {
                 }
             }
         });
+
         albumListView.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
                 Album selected = albumListView.getSelectionModel().getSelectedItem();
@@ -95,26 +176,45 @@ public class HomeScreen {
                 }
             }
         });
+
+        Button viewArtistBtn = new Button("View Artist");
+        viewArtistBtn.setOnAction(e -> {
+            Album selected = albumListView.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                Artist artist = ArtistStorage.getArtistByUsername(selected.getArtistUsername());
+                if (artist != null) {
+                    ArtistProfileScreen.show(artist);
+                } else {
+                    new Alert(Alert.AlertType.INFORMATION, "This artist has no profile.").show();
+                }
+            }
+        });
+
+        VBox container = new VBox(10, albumListView, viewArtistBtn);
+        container.setPadding(new Insets(10));
+        Tab albumsTab = tabPane.getTabs().get(1);
+        albumsTab.setContent(container);
     }
+
 
     private static HBox createTopBar() {
         HBox topBar = new HBox(10);
         topBar.setPadding(new Insets(0, 0, 20, 0));
 
-        // Logo
+
         ImageView logoView = new ImageView(new Image("file:genius_logo.png")); // Ensure the path is correct
         logoView.setFitHeight(40); // Set desired height
         logoView.setPreserveRatio(true);
 
-        // Back button
+
         Button backBtn = new Button("← Back");
         backBtn.setOnAction(e -> returnToPreviousScreen());
 
-        // Refresh button
+
         Button refreshBtn = new Button("Refresh");
         refreshBtn.setOnAction(e -> refreshContent());
 
-        // Search field
+
         TextField searchField = new TextField();
         searchField.setPromptText("Search for artist, song, or album");
 
@@ -133,21 +233,22 @@ public class HomeScreen {
 
     public static void refreshContent() {
         try {
-            // Reload all songs and albums from storage
+
             List<Song> allSongs = SongStorage.getAllSongs();
             List<Album> allAlbums = AlbumStorage.getAllAlbums();
 
-            // Update list views
+
             songListView.setItems(FXCollections.observableArrayList(allSongs));
             albumListView.setItems(FXCollections.observableArrayList(allAlbums));
 
-            // Sort by popularity (views for songs, track count for albums)
+
             songListView.getItems().sort(Comparator.comparingInt(Song::getViews).reversed());
 
         } catch (Exception e) {
             System.err.println("Error refreshing content: " + e.getMessage());
             new Alert(Alert.AlertType.ERROR, "Failed to refresh content").show();
         }
+
     }
 
     public static void searchEntities(String query) {

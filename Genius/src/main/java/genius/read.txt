@@ -1,2 +1,0 @@
-All classes are here
-If you saw some unused or unfinish work read the last part of readme

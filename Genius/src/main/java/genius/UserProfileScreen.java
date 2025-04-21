@@ -107,7 +107,7 @@ public class UserProfileScreen {
     private static TabPane createContentTabs(User user) {
         TabPane tabPane = new TabPane();
 
-        // Songs Tab
+
         if (user.isArtist()) {
             Tab songsTab = new Tab("Songs");
             songsTab.setContent(createSongsList(user));
@@ -115,7 +115,7 @@ public class UserProfileScreen {
             tabPane.getTabs().add(songsTab);
         }
 
-        // Albums Tab
+
         if (user.isArtist()) {
             Tab albumsTab = new Tab("Albums");
             albumsTab.setContent(createAlbumsList(user));
@@ -123,7 +123,7 @@ public class UserProfileScreen {
             tabPane.getTabs().add(albumsTab);
         }
 
-        // Following Tab
+
         if (UserStorage.countFollowing(user.getUsername()) > 0) {
             Tab followingTab = new Tab("Following");
             followingTab.setContent(createFollowingList(user));
@@ -237,12 +237,13 @@ public class UserProfileScreen {
 
         statsGrid.add(new Label("Comments:"), 0, 0);
         statsGrid.add(new Label(String.valueOf(commentCount)), 1, 0);
-        statsGrid.add(new Label("Likes Given:"), 0, 1);
-        statsGrid.add(new Label(String.valueOf(likeCount)), 1, 1);
-        statsGrid.add(new Label("Following:"), 0, 2);
-        statsGrid.add(new Label(followingCount + " artists"), 1, 2);
-        statsGrid.add(new Label("Followers:"), 0, 3);
-        statsGrid.add(new Label(followerCount + " users"), 1, 3);
+        long followingCount2 = ArtistStorage.getAllArtists().stream()
+                .filter(a -> a.getFollowers().contains(Main.currentUser.getUsername()))
+                .count();
+
+        Label followingLabel = new Label("Following Artists: " + followingCount);
+
+
 
         statsBox.getChildren().addAll(statsLabel, statsGrid);
         return statsBox;

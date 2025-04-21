@@ -31,6 +31,31 @@ public class ArtistProfileScreen {
         Label bioLabel = new Label("Bio: " + artist.getBio());
         Label followersLabel = new Label("Followers: " + artist.getFollowerCount());
 
+        // Follow / Unfollow Button
+        Button followBtn = new Button();
+        String currentUsername = Main.currentUser != null ? Main.currentUser.getUsername() : null;
+        boolean isFollowing = currentUsername != null && artist.getFollowers().contains(currentUsername);
+        followBtn.setText(isFollowing ? "Unfollow" : "Follow");
+
+        followBtn.setOnAction(e -> {
+            if (Main.currentUser == null) {
+                new Alert(Alert.AlertType.INFORMATION, "You need to be logged in to follow an artist.").show();
+                return;
+            }
+
+            if (artist.getFollowers().contains(Main.currentUser.getUsername())) {
+                artist.removeFollower(Main.currentUser.getUsername());
+                followBtn.setText("Follow");
+            } else {
+                artist.addFollower(Main.currentUser.getUsername());
+                followBtn.setText("Unfollow");
+            }
+
+            ArtistStorage.saveArtist(artist);
+            followersLabel.setText("Followers: " + artist.getFollowerCount());
+        });
+
+        // Albums and Songs
         ListView<Object> contentList = new ListView<>();
         List<Object> content = FXCollections.observableArrayList();
 
@@ -50,7 +75,7 @@ public class ArtistProfileScreen {
             }
         });
 
-        contentBox.getChildren().addAll(bioLabel, followersLabel, new Label("Albums and Songs:"), contentList);
+        contentBox.getChildren().addAll(bioLabel, followersLabel, followBtn, new Label("Albums and Songs:"), contentList);
         layout.setCenter(contentBox);
 
         Scene scene = new Scene(layout, 800, 600);

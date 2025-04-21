@@ -30,6 +30,26 @@ public class ArtistDashboard {
         // Top Bar
         HBox topBar = createTopBar();
         mainLayout.setTop(topBar);
+// Bio Section
+        VBox bioBox = new VBox(10);
+        bioBox.setPadding(new Insets(10));
+
+        Artist artist = ArtistStorage.getArtistByUsername(Main.currentUser.getUsername());
+        Label bioLabel = new Label("Bio: " + (artist != null ? artist.getBio() : ""));
+        TextField bioField = new TextField();
+        bioField.setPromptText("Update your artist bio");
+
+        Button updateBioBtn = new Button("Update Bio");
+        updateBioBtn.setOnAction(e -> {
+            if (artist != null) {
+                artist.setBio(bioField.getText().trim());
+                ArtistStorage.saveArtist(artist);
+                bioLabel.setText("Bio: " + artist.getBio());
+            }
+        });
+
+        bioBox.getChildren().addAll(bioLabel, bioField, updateBioBtn);
+        mainLayout.setTop(new VBox(topBar, bioBox));
 
         // Main Content
         TabPane tabPane = new TabPane();
