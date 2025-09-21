@@ -1,6 +1,6 @@
 # 🎵 Genius - Music-Lyrics-Platform
 
-Hi everyone ! I am Sadra and I made this app for my Nowruz-Project in Advanced Programming course at SBU university.
+I made this app for my Nowruz-Project in Advanced Programming course at SBU university.
 I started by learning javafx and then building a simple login and register app. Then I added different roles for users and brick by brick I made this app. So without anymore stories lests dive into it!
 ## 📖 Table of Contents
 - [Description](#-description)
@@ -164,5 +164,3 @@ Got questions or suggestions?
 I wanted to add many other features like following,analyzing,customization for profile screen and writing a bio to apply to become an artist and you can 
 still see some unused/unfinished code in my project because I wasn't able to do it due to lack of much Java knowledge and limited time.
 So if you have any ideas to improve this app feel free to tell me!
-
-Also, if you are my mentor/TA I'm sorry for almost 7 hours delay😬
